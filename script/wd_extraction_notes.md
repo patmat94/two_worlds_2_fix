@@ -119,14 +119,18 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
 
 ## Next likely steps
 
-- Run a full extraction of `DLC3_PC_POL.wd` and search it for the Casbrim /
-  Expert Side Adventure strings (see the toolkit findings section below, if
-  present, for results of this run).
+- ~~Run a full extraction of `DLC3_PC_POL.wd` and search it for the Casbrim /
+  Expert Side Adventure strings~~ — done, see "Toolkit findings" below.
+- ~~Use `diff_saves` across saves that bracket a specific quest state
+  change~~ — tried exhaustively (all 285 consecutive pairs in
+  `saves/remote/`, plus decompressed-content diffing); see "Batch save-diff
+  scan" above. **Blocked**: no available save pair, however close in time,
+  isolates a small enough region. Needs either (a) a purpose-made save pair
+  bracketing exactly one quest action with nothing else changing, or
+  (b) parsing the decompressed blob's actual record structure instead of
+  diffing it as opaque bytes.
 - Determine whether `word1..word4` are offsets, checksums, or something else
   — the field is still unresolved even with corrected values.
-- Use `diff_saves` across saves that bracket a specific quest state change
-  to find candidate quest-progress byte regions independent of the `.wd`
-  investigation.
 - The file *payload* location still cannot be derived from an entry's
   metadata using the current record fields — path metadata is present, but
   nothing in `type_id`/`flags`/`word1..word4` yet maps to where the actual
@@ -196,3 +200,48 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   will require diffing saves that bracket a single, isolated quest-state
   change (see "Next likely steps" above), not just two sequential
   autosaves.
+
+## Batch save-diff scan (2026-07-10) — no small regions found anywhere
+
+Added `tw2tools.scan_saves` (runs `diff_byte_regions` across every consecutive
+pair in a save-history directory and reports only regions at or below a size
+threshold) and ran it against all 286 real saves in `saves/remote/`
+(285 consecutive pairs):
+
+- With `--max-region-size 256`: **0 pairs** anywhere in the full 285-pair
+  history produced a small region. Every single pair's one changed region
+  spans from a fixed offset (2088 bytes into the raw file) all the way to
+  EOF, exactly like the 000000→000001 example above.
+- The raw save file itself contains one zlib-compressed block (offset
+  `341692` in `000000.TwoWorldsIISave`, decompressing to ~2.4MB) — the bulk
+  game-state payload. The ~341KB before it is plaintext and (per the earlier
+  `090001.TwoWorldsIISave` legacy exploration) appears to be a resource/mod
+  manifest, not quest state.
+- **Decompressing that blob and diffing the decompressed content doesn't
+  help either.** Sampled across the full save range (indices 5, 20, 50, 100,
+  150, 200, 250) and also across the *closest-in-real-time* pairs (by file
+  mtime — e.g. `000119`→`000120` only 12 seconds apart, `000096`→`000097`
+  30 seconds apart): every single pair, including the 12-second one, still
+  shows a single changed region covering essentially the entire decompressed
+  blob (>99% of its bytes), not a small isolated diff.
+- Decompressed blob sizes also swing wildly between adjacent save numbers
+  (e.g. 4.47MB → 2.86MB → 3.96MB across saves 5/6/20/21), which combined with
+  the always-100%-changed result suggests the save's state section is either
+  itself internally re-compressed/re-encoded per save in a way that
+  scrambles byte offsets on any change, or contains a large volume of
+  continuously-changing simulation data (NPC/creature positions, timers,
+  weather/RNG state, etc.) unrelated to quest progress, which is enough by
+  itself to defeat a byte-level LCP/LCS diff even between saves seconds
+  apart.
+
+**Conclusion:** simple byte-diffing (even after decompression) cannot
+isolate a quest-progress flag from these particular saves — the available
+`saves/remote/*` snapshots are not close enough together in a *content*
+sense (even when close in *time*) for the signal to stand out from
+unrelated per-save noise. This blocks further progress via this specific
+technique without either (a) two saves that are known to bracket *only* a
+single quest-state change with everything else frozen (e.g., quicksave,
+interact with exactly one quest NPC, quicksave again, ideally without
+walking anywhere in between), or (b) actually parsing the decompressed
+blob's internal record structure rather than diffing it as an opaque byte
+stream.
