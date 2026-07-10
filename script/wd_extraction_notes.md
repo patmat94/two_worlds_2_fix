@@ -77,25 +77,56 @@ The footer is parsed as:
 
 ## Local files used for analysis
 
-- `extract_wd.py` — current extraction script
-- `inspect_wd_structure.py` — entry parsing and metadata inspection
-- `debug_entry_decode.py` — field decoding for known entries
-- `extract_analysis.py` — zlib block scanning and concatenated stream analysis
-- `analyze_wd_entries.py` — field distribution and offset candidacy stats
-- `inspect_chunk.py` — raw section inspection for a specific decompressed chunk
+The legacy one-off scripts previously listed here were replaced by the
+`tw2tools` package (see `docs/superpowers/specs/2026-07-10-wd-toolkit-design.md`
+for the design, and `docs/superpowers/plans/2026-07-10-tw2-wd-toolkit.md` for
+how it was built). Current tools, run from `script/`:
 
-## Current limitations
+- `python -m tw2tools.extract <archive.wd> [-o out_dir]` — full zlib block extraction
+- `python -m tw2tools.list_entries <chunk_file_or_dir> [--filter SUFFIX] [--json OUT]` — archive entry tables
+- `python -m tw2tools.search_text <file_or_dir> --term TERM [...] [--json OUT]` — multi-encoding text search
+- `python -m tw2tools.diff_saves <save_a> <save_b> [--min-size N] [--json OUT]` — byte-region diff between two saves
 
-- The exact meaning of `word1..word4` in the footer is not resolved.
-- The path metadata is present, but the file payload location is not directly extracted from the decompressed chunk using the current record fields.
-- `DLC_3.eco` payload extraction still needs a correct mapping from metadata to actual file bytes.
+## Correction: real `word1`/`word4` values
+
+Re-parsing `DLC3_PC_chunk_00000030.bin` with `tw2tools.wd_format.parse_archive_entries`
+(a straightforward little-endian 4-word footer read) produced different
+`word1`/`word4` values than originally hand-transcribed above for two
+example entries. The corrected, code-verified values:
+
+- `ActionSets\DRAGON_10_DEFAULT_TW2.act`: `word1=100663296` (0x06000000),
+  `word2=335544325` (0x14000005, unchanged), `word3=56` (0x38, unchanged),
+  `word4=503316480` (0x1e000000)
+- `Scripts\Campaigns\Missions\DLC_3.eco`: `word1=520093696` (0x1f000000),
+  `word2=3154116609` (0xbc000001), `word3=5` (unchanged in value, byte order
+  differs from the original note), `word4=704643072` (0x2a000000)
+
+The original values above were likely transcribed with inconsistent byte
+ordering across fields. Treat the corrected values (and `tw2tools.wd_format`
+as the source of truth) going forward — the `word1..word4` semantics are
+still unresolved either way.
+
+## File locations (as of 2026-07-10)
+
+Real game data now lives under `files/Two Worlds 2/` (gitignored):
+
+- `DLC3_PC.wd` — main DLC3 asset archive (~1.9GB)
+- `DLC3_PC_POL.wd` — Polish localization archive (~1.3MB compressed), the
+  most likely home for Polish quest-name strings like "Ekspercka przygoda
+  poboczna: Bogowie i demony" (Expert Side Adventure) or "Casbrim"
+- `saves/remote/NNNNNN.TwoWorldsIISave(_header)` — 572 sequential real save
+  snapshots, usable with `diff_saves` to find quest-progress byte regions
 
 ## Next likely steps
 
-- Determine whether `word1` is a global offset into the concatenated decompressed stream or a different data segment.
-- Investigate whether the archive uses chunk indices or a separate data table for payload storage.
-- Scan the concatenated stream for the dynamic file data pattern and correlate with known entry sizes.
-- Update `extract_wd.py` to translate metadata fields correctly before attempting file writes.
+- Run a full extraction of `DLC3_PC_POL.wd` and search it for the Casbrim /
+  Expert Side Adventure strings (see the toolkit findings section below, if
+  present, for results of this run).
+- Determine whether `word1..word4` are offsets, checksums, or something else
+  — the field is still unresolved even with corrected values.
+- Use `diff_saves` across saves that bracket a specific quest state change
+  to find candidate quest-progress byte regions independent of the `.wd`
+  investigation.
 
 ## Notes for AI models
 
