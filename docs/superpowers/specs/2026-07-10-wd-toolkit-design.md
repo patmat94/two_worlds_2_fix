@@ -96,11 +96,19 @@ the format improves:
   UTF-16LE without a BOM (needed for Polish diacritics such as in "Ekspercka
   przygoda poboczna"); return term, encoding used, byte offset, and a
   hex+decoded context snippet per hit
-- `diff_byte_regions(a: bytes, b: bytes) -> list[DiffRegion]` — use
-  `difflib.SequenceMatcher` (opcodes over the raw bytes) to find contiguous
-  `replace`/`insert`/`delete` regions between two save files, returning each
-  region's byte range in both files and the old/new bytes — robust to the
-  slight size shifts observed between consecutive saves
+- `diff_byte_regions(a: bytes, b: bytes) -> list[DiffRegion]` — find the
+  longest common prefix and longest common suffix between the two byte
+  strings, and return the single `replace`/`insert`/`delete` region spanning
+  everything in between (empty list if the files are identical). This is an
+  O(n) linear scan, robust to the slight size shifts observed between
+  consecutive saves. (A general-purpose sequence-alignment diff like
+  `difflib.SequenceMatcher` was considered, but rejected: with only 256
+  possible byte values, binary data has far more repeated elements than text,
+  which can push `SequenceMatcher` toward its O(n·m) worst case on
+  ~580KB files — a real hang risk, not a theoretical one. Prefix/suffix
+  scanning trades finding multiple *scattered* changed regions for
+  guaranteed-fast results; the single returned region can be inspected by
+  hand for sub-structure if needed.)
 
 `ArchiveEntry`, `Match`, and `DiffRegion` are simple `dataclasses`.
 
