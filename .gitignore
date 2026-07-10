@@ -1,5 +1,6 @@
 extracted_wd/
 files/
+.superpowers/
 wd_extract/
 __pycache__/
 *.pyc
