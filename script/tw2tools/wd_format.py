@@ -260,3 +260,51 @@ def find_named_records(
                 records.append(NamedRecord(offset=pos, name=candidate.decode("ascii")))
         pos += 1
     return records
+
+
+def _read_length_prefixed_ascii(
+    data: bytes, pos: int, min_length: int = 1, max_length: int = 64
+) -> tuple[str, int] | tuple[None, None]:
+    if pos + 4 > len(data):
+        return None, None
+    (length,) = struct.unpack_from("<I", data, pos)
+    if not (min_length <= length <= max_length) or pos + 4 + length > len(data):
+        return None, None
+    candidate = data[pos + 4 : pos + 4 + length]
+    if not all(32 <= b < 127 for b in candidate):
+        return None, None
+    return candidate.decode("ascii"), pos + 4 + length
+
+
+@dataclass
+class PropertyBag:
+    offset: int
+    properties: dict[str, str]
+
+
+def parse_property_bags(
+    data: bytes, min_props: int = 1, max_props: int = 10
+) -> list[PropertyBag]:
+    bags: list[PropertyBag] = []
+    pos = 0
+    n = len(data)
+    while pos + 4 <= n:
+        (count,) = struct.unpack_from("<I", data, pos)
+        if min_props <= count <= max_props:
+            cursor = pos + 4
+            properties: dict[str, str] = {}
+            ok = True
+            for _ in range(count):
+                key, cursor = _read_length_prefixed_ascii(data, cursor)
+                if key is None:
+                    ok = False
+                    break
+                value, cursor = _read_length_prefixed_ascii(data, cursor)
+                if value is None:
+                    ok = False
+                    break
+                properties[key] = value
+            if ok:
+                bags.append(PropertyBag(offset=pos, properties=properties))
+        pos += 1
+    return bags

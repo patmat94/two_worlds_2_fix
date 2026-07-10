@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -201,3 +201,32 @@ def test_find_named_records_respects_length_bounds():
 def test_find_named_records_rejects_non_printable_candidates():
     blob = struct.pack("<I", 5) + b"\x00\x01\x02\x03\x04"
     assert find_named_records(blob) == []
+
+
+def _build_property_bag(pairs: list[tuple[str, str]]) -> bytes:
+    out = struct.pack("<I", len(pairs))
+    for key, value in pairs:
+        out += struct.pack("<I", len(key)) + key.encode("ascii")
+        out += struct.pack("<I", len(value)) + value.encode("ascii")
+    return out
+
+
+def test_parse_property_bags_finds_key_value_pairs():
+    blob = b"noise" + _build_property_bag(
+        [("PCQ", "3483"), ("PSDN", "0"), ("PQUS", "2")]
+    ) + b"tail"
+    bags = parse_property_bags(blob)
+    assert len(bags) == 1
+    assert bags[0].properties == {"PCQ": "3483", "PSDN": "0", "PQUS": "2"}
+
+
+def test_parse_property_bags_respects_count_bounds():
+    # count of 0 is below the default min_props=1, must not match
+    blob = struct.pack("<I", 0)
+    assert parse_property_bags(blob) == []
+
+
+def test_parse_property_bags_ignores_malformed_candidates():
+    # count says 2 pairs but there's only one valid key/value present
+    blob = struct.pack("<I", 2) + struct.pack("<I", 3) + b"PCQ" + struct.pack("<I", 4) + b"3483"
+    assert parse_property_bags(blob) == []
