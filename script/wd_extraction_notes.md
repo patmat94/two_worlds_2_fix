@@ -14,7 +14,7 @@ This document summarizes what has been learned about the `DLC3_PC_POL.wd` archiv
 
 ## Decompressed chunk structure
 
-- Decompressed chunks are written as `DLC3_PC_chunk_<offset>.bin` files.
+- Decompressed chunks are written as `DLC3_PC_chunk_<offset>.bin` files. **Note:** the examples in this section come from `DLC3_PC.wd` (main ~1.9GB asset archive); later sections document `DLC3_PC_POL_chunk_*` files from the separate `DLC3_PC_POL.wd` archive (~1.3MB Polish localization), which has zlib blocks at the same offsets but different content.
 - Example chunk file containing `.eco` metadata: `DLC3_PC_chunk_00000030.bin`.
 - Chunks appear to contain metadata records for archive entries, not necessarily the raw file payloads.
 - The first bytes of `DLC3_PC_chunk_00000030.bin` look like a header followed by an entry list: `.W.. -LevelsCopies-\nowe\Level 1...`
