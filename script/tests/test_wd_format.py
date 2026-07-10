@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -174,3 +174,30 @@ def test_parse_save_summary_extracts_known_fields():
 
 def test_parse_save_summary_returns_none_when_anchor_missing():
     assert parse_save_summary(b"no summary block here") is None
+
+
+def test_find_named_records_finds_length_prefixed_ascii_names():
+    blob = (
+        b"noise"
+        + struct.pack("<I", 7)
+        + b"MyFlag1"
+        + b"gap"
+        + struct.pack("<I", 16)
+        + b"CasbrimTriggered"
+        + b"tail"
+    )
+    records = find_named_records(blob)
+    names = [r.name for r in records]
+    assert "MyFlag1" in names
+    assert "CasbrimTriggered" in names
+
+
+def test_find_named_records_respects_length_bounds():
+    # length prefix of 2 is below the default min_length=3, so it must not match
+    blob = struct.pack("<I", 2) + b"AB"
+    assert find_named_records(blob, min_length=3, max_length=64) == []
+
+
+def test_find_named_records_rejects_non_printable_candidates():
+    blob = struct.pack("<I", 5) + b"\x00\x01\x02\x03\x04"
+    assert find_named_records(blob) == []

@@ -238,3 +238,25 @@ def parse_save_summary(data: bytes) -> SaveSummary | None:
         experience=fields.get("PD"),
         raw_text=text,
     )
+
+
+@dataclass
+class NamedRecord:
+    offset: int
+    name: str
+
+
+def find_named_records(
+    data: bytes, min_length: int = 3, max_length: int = 64
+) -> list[NamedRecord]:
+    records: list[NamedRecord] = []
+    pos = 0
+    n = len(data)
+    while pos + 4 <= n:
+        (length,) = struct.unpack_from("<I", data, pos)
+        if min_length <= length <= max_length and pos + 4 + length <= n:
+            candidate = data[pos + 4 : pos + 4 + length]
+            if all(32 <= b < 127 for b in candidate):
+                records.append(NamedRecord(offset=pos, name=candidate.decode("ascii")))
+        pos += 1
+    return records
