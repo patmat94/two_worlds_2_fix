@@ -22,7 +22,7 @@ def find_zlib_offsets(data: bytes) -> list[int]:
     return sorted(offsets)
 
 
-def _decompress_at(data: bytes, offset: int) -> bytes | None:
+def _decompress_at_ex(data: bytes, offset: int) -> tuple[bytes, int] | tuple[None, None]:
     obj = zlib.decompressobj()
     result = bytearray()
     pos = offset
@@ -32,10 +32,18 @@ def _decompress_at(data: bytes, offset: int) -> bytes | None:
             result.extend(obj.decompress(chunk))
             pos += len(chunk)
             if obj.unused_data or obj.eof:
-                return bytes(result)
-        return bytes(result) if obj.eof else None
+                consumed = pos - len(obj.unused_data) - offset
+                return bytes(result), consumed
+        if obj.eof:
+            return bytes(result), pos - offset
+        return None, None
     except zlib.error:
-        return None
+        return None, None
+
+
+def _decompress_at(data: bytes, offset: int) -> bytes | None:
+    result, _ = _decompress_at_ex(data, offset)
+    return result
 
 
 def decompress_all_blocks(data: bytes) -> Iterator[tuple[int, bytes]]:
@@ -43,6 +51,14 @@ def decompress_all_blocks(data: bytes) -> Iterator[tuple[int, bytes]]:
         decompressed = _decompress_at(data, offset)
         if decompressed:
             yield offset, decompressed
+
+
+def patch_zlib_block(data: bytes, offset: int, new_decompressed: bytes) -> bytes:
+    _, consumed = _decompress_at_ex(data, offset)
+    if consumed is None:
+        raise ValueError(f"no valid zlib block at offset {offset}")
+    recompressed = zlib.compress(new_decompressed)
+    return data[:offset] + recompressed + data[offset + consumed:]
 
 
 ENTRY_MARKERS = (b"$", b"*")

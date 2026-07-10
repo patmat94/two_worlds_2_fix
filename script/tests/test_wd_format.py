@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -230,3 +230,24 @@ def test_parse_property_bags_ignores_malformed_candidates():
     # count says 2 pairs but there's only one valid key/value present
     blob = struct.pack("<I", 2) + struct.pack("<I", 3) + b"PCQ" + struct.pack("<I", 4) + b"3483"
     assert parse_property_bags(blob) == []
+
+
+def test_patch_zlib_block_replaces_content_and_preserves_surrounding_bytes():
+    original_payload = b"original content here"
+    compressed = zlib.compress(original_payload)
+    data = b"PREFIX" + compressed + b"SUFFIX"
+    offset = len(b"PREFIX")
+
+    new_payload = b"replaced content, different length!!"
+    patched = patch_zlib_block(data, offset, new_payload)
+
+    assert patched.startswith(b"PREFIX")
+    assert patched.endswith(b"SUFFIX")
+    blocks = list(decompress_all_blocks(patched))
+    assert len(blocks) == 1
+    assert blocks[0][1] == new_payload
+
+
+def test_patch_zlib_block_raises_for_invalid_offset():
+    with pytest.raises(ValueError):
+        patch_zlib_block(b"not a zlib stream at all", 0, b"data")
