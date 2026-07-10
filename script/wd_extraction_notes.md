@@ -149,9 +149,11 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
 
 - Full extraction of `DLC3_PC_POL.wd` via `tw2tools.extract` produced 189 blocks
   (matches the previously reported 189 exactly).
-- `.eco` entry count across the full extraction: 0 (`list_entries wd_extract
-  --filter .eco` found no entries with a `.eco` extension anywhere in the
-  extracted blocks; `wd_extract/eco_entries.json` is an empty `[]`).
+- `.eco` entry count across the full extraction: 0 (POL archive only; the
+  `.eco`-bearing chunk `DLC3_PC_chunk_00000030.bin` referenced earlier in this
+  document is from the separate `DLC3_PC.wd`, not re-extracted here; `list_entries
+  wd_extract --filter .eco` found no entries with a `.eco` extension anywhere in
+  the extracted blocks; `wd_extract/eco_entries.json` is an empty `[]`).
 - Casbrim / "Ekspercka przygoda poboczna" search across the full extraction:
   **found** — 72 total matches (`search_text wd_extract --term Casbrim --term
   "Ekspercka przygoda poboczna"`), 68 for `Casbrim` and 4 for `Ekspercka

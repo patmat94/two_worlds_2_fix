@@ -42,3 +42,15 @@ def test_diff_saves_min_size_filters_small_regions(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "Found 0 changed region(s)" in result.stdout
+
+
+def test_diff_saves_min_size_keeps_exact_boundary_region(tmp_path):
+    save_a = tmp_path / "a.save"
+    save_b = tmp_path / "b.save"
+    save_a.write_bytes(b"HEADER" + b"WXYZ" + b"FOOTER")
+    save_b.write_bytes(b"HEADER" + b"ABCD" + b"FOOTER")
+
+    result = _run(str(save_a), str(save_b), "--min-size", "4", cwd=SCRIPT_DIR)
+
+    assert result.returncode == 0, result.stderr
+    assert "Found 1 changed region(s)" in result.stdout
