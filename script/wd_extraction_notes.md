@@ -134,18 +134,27 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   found the generic named-flag record system and a `find_named_records`
   scanner + `flag_timeline` CLI for it (see "Named flag/record system
   found" above), and pinpointed exactly when Casbrim-related content loads
-  (save `000181`). **Still open:** every Casbrim-named flag found so far
-  tracks *zone/NPC-content loading*, not quest accept/completion
-  specifically — no flag with an "SP3"/"SideAdventure"/"Expert" naming
-  convention was found. Two ways to close this gap:
-  - Decode the generic record's trailing value fields well enough to tell
-    "not yet true" from "true" (the `(0, 9999, 0, 0, 0)` pattern needs a
-    contrasting example — ideally a flag known to be false in some saves
-    and true in others — to find what the "false" state looks like).
-  - Try more candidate names with `find_named_records`/`flag_timeline`
-    (e.g. names built from `SP3`, `SideAdventure`, `Ekspercka` transliterated
-    to ASCII, or quest-giver-NPC-based naming patterns inferred from how
-    `CasbrimTriggered` was named after the NPC, not the quest).
+  (save `000181`).
+- ~~Decode the generic record's trailing value fields / try more candidate
+  names~~ — done, see "Naming-convention dead end" above. **Genuinely
+  blocked** via name-based searching: no `Completed`/`Done`/`Accepted`
+  -style name exists anywhere in the ~3199 names scanned, and the two
+  `*Triggered` flags found have per-trigger-type-constant (not
+  per-progress) values. This path is exhausted without new information —
+  continuing to guess candidate names has hit diminishing returns.
+- **Remaining real options** (need a decision, not just more guessing):
+  1. Get a purpose-made save pair (see below) and diff it — would reveal
+     *some* byte change tied to the specific action, even without knowing
+     its name/structure in advance, which the named-flag approach can't do
+     for state that isn't stored as a named record at all (e.g. a bare
+     numeric quest-ID table entry).
+  2. Find and parse the numeric-ID-indexed quest table directly (a much
+     bigger reverse-engineering task — would need to locate a repeating
+     fixed-size record array in the blob and correlate positions with
+     known quest IDs, which we don't have a source for yet).
+  3. Accept the `.wd`/`.eco` side as a parallel, currently more tractable
+     avenue (`.eco` payload extraction — see below) instead of continuing
+     to push on save-file quest state.
 - If a fuller playthrough or new saves become available, get a
   purpose-made save pair bracketing exactly one isolated quest action
   (accept/turn-in) with minimal time/movement in between, and diff those —
@@ -382,3 +391,45 @@ candidate names fast, but the next real target is understanding the
 generic record's value-field layout (the `(0, 9999, 0, 0, 0)` trailing
 words) well enough to tell a "not yet true" record from a "true" one,
 rather than only detecting a record's mere presence.
+
+## Naming-convention dead end (2026-07-10) — value fields are static constants, not progress
+
+Followed up on both open items above:
+
+- **Naming-convention sweep:** enumerated all ~3199 distinct names in save
+  `000181` and grepped for common completion-style suffixes/keywords —
+  `Completed`, `Complete`, `Done`, `Finished`, `Accepted`, `Started`:
+  **zero matches for any of them, anywhere in the save.** `Triggered` only
+  matches two names in the whole save: `AbeTriggered` and
+  `CasbrimTriggered` (`Abe` being a different NPC). `Active`/`Quest`
+  substring matches are all item/file-manifest names
+  (`DLC3_QUESTWAND_1..3`, `Quests\TWII_DLC_SP3.dat/.lan/.qtx`,
+  `INV_PLACEHOLDER_QUESTLOG`, `DLC3_Active_telestone`, etc.), not
+  player-progress flags. This strongly suggests quest accept/complete state
+  is **not** tracked via named string flags at all in this record system —
+  the `*Triggered` records look like a narrow one-off convention for a
+  couple of specific story/dialogue beats, not a general quest tracker.
+- **Value-field check across save slots:** compared `CasbrimTriggered`'s
+  and `AbeTriggered`'s trailing 5 `uint32` words across saves `000181`,
+  `000200`, `000250`, `000280`, and the other save slots `020001`,
+  `090000`-`090003` (different characters/campaigns). Every single
+  occurrence of `CasbrimTriggered` has the identical value
+  `(0, 9999, 0, 0, 0)`; every occurrence of `AbeTriggered` has
+  `(0, 16666, 0, 0, 0)` — different from Casbrim's, but *also* constant
+  everywhere it appears. This means `9999`/`16666` are almost certainly
+  static per-trigger-type constants baked into the game's script/trigger
+  definition (e.g. a trigger or dialogue-line ID), not a save-specific
+  progress counter — the record's mere *presence* really does appear to be
+  the only meaningful signal for these two flags, and that signal reads as
+  "one-time story beat fired," not "side quest completed."
+
+**Honest conclusion:** name-based searching for a Casbrim-quest-completion
+flag has hit a real dead end with the current save data and this record
+system. We have not found any evidence — positive or negative — that the
+"Ekspercka przygoda poboczna: Bogowie i demony" side quest was ever
+specifically accepted or completed in this playthrough; we've only shown
+that the player loaded the NPC/zone content Casbrim belongs to. Also worth
+being explicit: nothing found so far *proves* `CasbrimTriggered` is even
+related to this specific side quest rather than some other Casbrim
+interaction (e.g. a generic first-meeting dialogue) — the link is
+NPC-name-based, not quest-ID-based.
