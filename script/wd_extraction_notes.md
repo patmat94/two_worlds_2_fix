@@ -127,6 +127,15 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
 - Use `diff_saves` across saves that bracket a specific quest state change
   to find candidate quest-progress byte regions independent of the `.wd`
   investigation.
+- The file *payload* location still cannot be derived from an entry's
+  metadata using the current record fields — path metadata is present, but
+  nothing in `type_id`/`flags`/`word1..word4` yet maps to where the actual
+  file bytes live.
+- Even once `word1..word4` are resolved, mapping metadata to the real file
+  payload for an entry like `DLC_3.eco` is a separate, still-open problem:
+  `tw2tools.extract` only pulls out whole zlib blocks and `tw2tools.list_entries`
+  only parses/prints entry metadata — neither performs metadata-to-payload
+  mapping or extracts an individual file's bytes.
 
 ## Notes for AI models
 
