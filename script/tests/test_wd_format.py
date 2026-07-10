@@ -1,6 +1,10 @@
+import struct
 import zlib
+from pathlib import Path
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets
+import pytest
+
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -25,3 +29,59 @@ def test_decompress_all_blocks_finds_multiple_concatenated_streams():
     blocks = dict(decompress_all_blocks(data))
     assert blocks[0] == b"first block"
     assert blocks[len(first)] == b"second block"
+
+
+def _build_entry(path, type_id, flags, word1, word2, word3, word4, marker=b"$"):
+    footer = struct.pack("<HHIIII", type_id, flags, word1, word2, word3, word4)
+    return marker + path.encode("ascii") + b"\x01\x00" + footer
+
+
+def test_parse_archive_entries_single_entry():
+    blob = _build_entry("Scripts\\Foo.eco", 100, 1, 0x11, 0x22, 0x33, 0x44)
+    entries = parse_archive_entries(blob)
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.path == "Scripts\\Foo.eco"
+    assert entry.type_id == 100
+    assert entry.flags == 1
+    assert (entry.word1, entry.word2, entry.word3, entry.word4) == (0x11, 0x22, 0x33, 0x44)
+    assert entry.marker == "$"
+
+
+def test_parse_archive_entries_multiple_entries():
+    blob = _build_entry("A.eco", 1, 0, 1, 2, 3, 4) + _build_entry(
+        "B.act", 2, 1, 5, 6, 7, 8, marker=b"*"
+    )
+    entries = parse_archive_entries(blob)
+    assert [e.path for e in entries] == ["A.eco", "B.act"]
+    assert entries[1].marker == "*"
+
+
+CHUNK_PATH = (
+    Path(__file__).resolve().parents[1] / "extracted_wd" / "DLC3_PC_chunk_00000030.bin"
+)
+
+
+def test_parse_archive_entries_matches_known_real_chunk():
+    if not CHUNK_PATH.exists():
+        pytest.skip("extracted_wd chunk not present locally")
+    data = CHUNK_PATH.read_bytes()
+    entries = {e.path: e for e in parse_archive_entries(data)}
+
+    dragon = entries["ActionSets\\DRAGON_10_DEFAULT_TW2.act"]
+    assert (dragon.type_id, dragon.flags) == (63944, 1)
+    assert (dragon.word1, dragon.word2, dragon.word3, dragon.word4) == (
+        100663296,
+        335544325,
+        56,
+        503316480,
+    )
+
+    dlc3 = entries["Scripts\\Campaigns\\Missions\\DLC_3.eco"]
+    assert (dlc3.type_id, dlc3.flags) == (9952, 62)
+    assert (dlc3.word1, dlc3.word2, dlc3.word3, dlc3.word4) == (
+        520093696,
+        3154116609,
+        5,
+        704643072,
+    )
