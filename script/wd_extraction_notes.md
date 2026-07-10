@@ -773,3 +773,77 @@ different mechanism than named property bags — most likely a raw
 numeric-ID table this investigation hasn't located, or logic embedded in
 the (still unparsed) `.eco` scripts that isn't persisted as an explicit
 "quest state" record the way one might expect.
+
+## Major breakthrough: `.eco` payload location solved (2026-07-11)
+
+Pursued `.eco` decoding directly, per user request. **Solved the
+long-standing payload-location problem** — not via the entry-footer
+`word1..word4` fields (still unresolved), but by finding that `.eco` files
+are stored completely independently of the metadata/entry-list system:
+each compiled `.eco` file is its own separate zlib block, and its
+decompressed content starts with a literal magic header:
+
+```
+"ECO" + 0x00 + uint16(0) + uint16(6)    (8 bytes: 45 43 4f 00 00 00 06 00)
++ uint32(3)                              (purpose unknown, constant so far)
++ uint32(name_length) + name              (self-identifying filename, no extension)
++ ...compiled bytecode...
+```
+
+Added `tw2tools.wd_format.find_eco_files(data) -> list[EcoFile]` (tested)
+to detect this magic and extract the embedded name. Scanning the full
+`DLC3_PC.wd` archive (~22,318 blocks) for chunks starting with this magic
+found **exactly 21 real `.eco` files** (far fewer than the ~1203 `.eco`
+path references in the entry-list metadata, confirming most of those were
+just path-string noise from the metadata scanner, not real distinct
+payloads). Identified by name: `DLC_2`, `DLC_3`, `DLC_PIRATES`,
+`TwoWorlds2Containers`, `Default Events Script`, `TwoWorlds2Music`,
+`TwoWorlds2Shops`, `TwoWorlds2Trainers`, `Achievements Script`,
+`heroControl`, **`TwoWorlds2Quests`** (179,340 bytes — the main quest
+script), `Sounds Script`, `Weather Script`, `ConfigCampaign`,
+`JSTestCampaign` (×2), `Generic Adventure Script`, `MagicControl`,
+`RPGCompute` (293,725 bytes, the largest), `Test maps`.
+
+**The bytecode itself is opaque** — searching `TwoWorlds2Quests` and
+`DLC_3` for `Casbrim`/`SP3`/`Q_45`/`Ekspercka` found nothing. This confirms
+(rather than contradicts) everything learned so far: compiled scripts
+reference entities/dialogue purely by numeric ID, with display names/text
+living only in the separate localization tables already decoded.
+
+**But extracting the scripts' embedded string tables was very
+informative.** These use a *different* encoding than the length-prefixed
+format used elsewhere — plain null-terminated C-strings. Extracting all
+such strings (`[ -~]{4,}\x00` pattern) from all 21 files (`DLC_2`/`DLC_3`
+have only 2 each; `TwoWorlds2Quests` has 352; `RPGCompute` has 1045) reveals
+the **generic quest-engine's own vocabulary** — not Casbrim-specific, but
+the shared templating system used for *every* quest:
+- `translateQ_%d_QTD` / `_QSD` / `_QFD` / `_QCD` (each with `_C1`/`_C2`
+  variants) — almost certainly Quest Title/Start/Failed/Complete
+  Description templates, confirming a real title/start/fail/complete
+  lifecycle exists generically for all quests.
+- Literal state constants `QUEST_GIVEN` and `QUEST_SOLVED` sitting right
+  alongside those templates — real enum-like state names.
+- `translateDQ_%d` and `translateGROUP_%d` — confirms the `DQ_`/`GROUP_`
+  localization key conventions found earlier are exactly this generic
+  templating system, not something hand-authored per quest.
+- `translateName_%d` — confirms the `Name_<ID>` self-reference convention.
+- Property-bag keys **`PSDN`, `PQUS`, `Lector`, `PUMN`** appear as literal
+  engine strings here too, cross-validating the property-bag decoding from
+  earlier sessions (these are genuine, engine-recognized keys, not
+  something invented by the byte-scanning approach). Two more previously
+  unseen keys appear alongside them: `PQTIMED`, `PQBS`.
+- Level-marker vocabulary also appears here: `MARKER_CHEST`, `MARKER_GATE`,
+  `MARKER_TELEPORT_LOCKED_DOOR_START`, `TELE_OUT_EFFECT`, `QLINV`, `LLvl` —
+  consistent with the level-marker data found in the earlier `.wd`
+  investigation.
+
+**One notable gap:** `PCQ` itself — the specific property confirmed to
+carry quest-relevant state for Casbrim — does **not** appear as a literal
+string anywhere checked so far (not in `TwoWorlds2Quests`'s 352 strings,
+not in any of the other 21 `.eco` files searched as a substring, not in the
+level-marker chunk). Unlike `PSDN`/`PQUS`/`Lector`/`PUMN`, which are all
+confirmed generic engine strings, `PCQ` remains unexplained — either
+constructed dynamically at runtime (not a compile-time string literal) or
+defined in one of the several `.eco` files whose strings haven't been
+individually inspected yet (only `TwoWorlds2Quests`, `DLC_3`, and the one
+level-marker chunk were checked for it specifically).
