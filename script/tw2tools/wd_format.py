@@ -204,3 +204,37 @@ def diff_byte_regions(a: bytes, b: bytes) -> list[DiffRegion]:
             b_bytes=b[b_start:b_end],
         )
     ]
+
+
+SAVE_SUMMARY_ANCHOR = "Miejsce:".encode("utf-16-le")
+
+
+@dataclass
+class SaveSummary:
+    location: str | None
+    play_time: str | None
+    active_mission: str | None
+    level: str | None
+    experience: str | None
+    raw_text: str
+
+
+def parse_save_summary(data: bytes) -> SaveSummary | None:
+    idx = data.find(SAVE_SUMMARY_ANCHOR)
+    if idx == -1 or idx < 4:
+        return None
+    (char_count,) = struct.unpack_from("<I", data, idx - 4)
+    text = data[idx : idx + char_count * 2].decode("utf-16-le", errors="replace")
+    fields: dict[str, str] = {}
+    for line in text.split("\n"):
+        if ":" in line:
+            key, _, value = line.partition(":")
+            fields[key.strip()] = value.strip()
+    return SaveSummary(
+        location=fields.get("Miejsce"),
+        play_time=fields.get("Czas gry"),
+        active_mission=fields.get("Aktywna misja"),
+        level=fields.get("Poziom"),
+        experience=fields.get("PD"),
+        raw_text=text,
+    )

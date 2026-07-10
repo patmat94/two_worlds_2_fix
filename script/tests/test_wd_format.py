@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -151,3 +151,26 @@ def test_diff_byte_regions_delete():
     assert regions[0].op == "delete"
     assert regions[0].a_bytes == b"EXTRA"
     assert regions[0].b_bytes == b""
+
+
+def _build_save_summary_block(text: str) -> bytes:
+    encoded = text.encode("utf-16-le")
+    char_count = len(text)
+    return struct.pack("<I", char_count) + encoded
+
+
+def test_parse_save_summary_extracts_known_fields():
+    text = "Miejsce: Zamek Vahkmaar\nCzas gry: 03:39\nAktywna misja: Ucieczka z wiezienia\nPoziom: 1\nPD: 0/2600"
+    data = b"leading garbage" + _build_save_summary_block(text) + b"trailing garbage"
+    summary = parse_save_summary(data)
+    assert summary is not None
+    assert summary.location == "Zamek Vahkmaar"
+    assert summary.play_time == "03:39"
+    assert summary.active_mission == "Ucieczka z wiezienia"
+    assert summary.level == "1"
+    assert summary.experience == "0/2600"
+    assert summary.raw_text == text
+
+
+def test_parse_save_summary_returns_none_when_anchor_missing():
+    assert parse_save_summary(b"no summary block here") is None
