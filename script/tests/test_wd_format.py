@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -116,3 +116,38 @@ def test_search_text_multi_handles_terms_with_diacritics_ascii_encode_fails():
 def test_search_text_multi_no_match_returns_empty_list():
     data = b"nothing interesting here"
     assert search_text_multi(data, ["Casbrim"]) == []
+
+
+def test_diff_byte_regions_identical_returns_empty_list():
+    assert diff_byte_regions(b"abcdef", b"abcdef") == []
+
+
+def test_diff_byte_regions_replace_middle():
+    a = b"HEADER" + b"OLDVALUE" + b"FOOTER"
+    b = b"HEADER" + b"NEWVAL!!" + b"FOOTER"
+    regions = diff_byte_regions(a, b)
+    assert len(regions) == 1
+    region = regions[0]
+    assert region.op == "replace"
+    assert region.a_bytes == b"OLDVALUE"
+    assert region.b_bytes == b"NEWVAL!!"
+
+
+def test_diff_byte_regions_insert():
+    a = b"HEADERFOOTER"
+    b = b"HEADER" + b"EXTRA" + b"FOOTER"
+    regions = diff_byte_regions(a, b)
+    assert len(regions) == 1
+    assert regions[0].op == "insert"
+    assert regions[0].a_bytes == b""
+    assert regions[0].b_bytes == b"EXTRA"
+
+
+def test_diff_byte_regions_delete():
+    a = b"HEADER" + b"EXTRA" + b"FOOTER"
+    b = b"HEADERFOOTER"
+    regions = diff_byte_regions(a, b)
+    assert len(regions) == 1
+    assert regions[0].op == "delete"
+    assert regions[0].a_bytes == b"EXTRA"
+    assert regions[0].b_bytes == b""

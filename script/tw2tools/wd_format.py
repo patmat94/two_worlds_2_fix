@@ -153,3 +153,54 @@ def search_text_multi(data: bytes, terms: list[str]) -> list[Match]:
                 )
                 start = idx + 1
     return matches
+
+
+@dataclass
+class DiffRegion:
+    op: str
+    a_start: int
+    a_end: int
+    b_start: int
+    b_end: int
+    a_bytes: bytes
+    b_bytes: bytes
+
+
+def diff_byte_regions(a: bytes, b: bytes) -> list[DiffRegion]:
+    max_prefix = min(len(a), len(b))
+    prefix_len = 0
+    while prefix_len < max_prefix and a[prefix_len] == b[prefix_len]:
+        prefix_len += 1
+
+    max_suffix = max_prefix - prefix_len
+    suffix_len = 0
+    while (
+        suffix_len < max_suffix
+        and a[len(a) - 1 - suffix_len] == b[len(b) - 1 - suffix_len]
+    ):
+        suffix_len += 1
+
+    a_start, a_end = prefix_len, len(a) - suffix_len
+    b_start, b_end = prefix_len, len(b) - suffix_len
+
+    if a_start == a_end and b_start == b_end:
+        return []
+
+    if a_start == a_end:
+        op = "insert"
+    elif b_start == b_end:
+        op = "delete"
+    else:
+        op = "replace"
+
+    return [
+        DiffRegion(
+            op=op,
+            a_start=a_start,
+            a_end=a_end,
+            b_start=b_start,
+            b_end=b_end,
+            a_bytes=a[a_start:a_end],
+            b_bytes=b[b_start:b_end],
+        )
+    ]
