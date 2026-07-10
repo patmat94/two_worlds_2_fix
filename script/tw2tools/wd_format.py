@@ -324,3 +324,27 @@ def parse_property_bags(
                 bags.append(PropertyBag(offset=pos, properties=properties))
         pos += 1
     return bags
+
+
+ECO_MAGIC = b"ECO"
+
+
+@dataclass
+class EcoFile:
+    offset: int
+    name: str
+    data: bytes
+
+
+def find_eco_files(data: bytes) -> list[EcoFile]:
+    files: list[EcoFile] = []
+    start = 0
+    while True:
+        idx = data.find(ECO_MAGIC, start)
+        if idx == -1:
+            break
+        name, _ = _read_length_prefixed_ascii(data, idx + 12, min_length=1, max_length=64)
+        if name is not None:
+            files.append(EcoFile(offset=idx, name=name, data=data[idx:]))
+        start = idx + 1
+    return files

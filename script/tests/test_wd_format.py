@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block, find_eco_files
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -251,3 +251,21 @@ def test_patch_zlib_block_replaces_content_and_preserves_surrounding_bytes():
 def test_patch_zlib_block_raises_for_invalid_offset():
     with pytest.raises(ValueError):
         patch_zlib_block(b"not a zlib stream at all", 0, b"data")
+
+
+def _build_eco_file(name: str, body: bytes = b"") -> bytes:
+    header = b"ECO" + b"\x00" + struct.pack("<HH", 0, 6)
+    name_bytes = name.encode("ascii")
+    return header + struct.pack("<II", 3, len(name_bytes)) + name_bytes + body
+
+
+def test_find_eco_files_identifies_by_embedded_name():
+    data = b"padding" + _build_eco_file("DLC_3", b"bytecode...") + b"trailing"
+    files = find_eco_files(data)
+    assert len(files) == 1
+    assert files[0].name == "DLC_3"
+    assert files[0].data.startswith(b"ECO")
+
+
+def test_find_eco_files_returns_empty_list_when_no_magic_present():
+    assert find_eco_files(b"nothing interesting here") == []
