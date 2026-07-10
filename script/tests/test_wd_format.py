@@ -100,6 +100,19 @@ def test_search_text_multi_finds_utf16le_including_polish_diacritics():
     assert any(m.encoding == "utf-16-le" and m.offset == 2 for m in matches)
 
 
+def test_search_text_multi_handles_terms_with_diacritics_ascii_encode_fails():
+    # This test verifies the UnicodeEncodeError catch branch for terms with actual Polish diacritics
+    term = "Starożytna kopalnia"  # Contains "ż", a non-ASCII Polish character
+    needle = term.encode("utf-16-le")
+    data = b"\x00\x00" + needle + b"\x00\x00"
+    matches = search_text_multi(data, [term])
+    # Should find a UTF-16LE match at the expected offset
+    assert len(matches) >= 1
+    assert any(m.encoding == "utf-16-le" and m.offset == 2 for m in matches)
+    # Verify no spurious ASCII match is produced (since term.encode("ascii") would fail)
+    assert not any(m.encoding == "ascii" for m in matches if m.term == term)
+
+
 def test_search_text_multi_no_match_returns_empty_list():
     data = b"nothing interesting here"
     assert search_text_multi(data, ["Casbrim"]) == []
