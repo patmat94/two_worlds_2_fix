@@ -125,10 +125,27 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   change~~ — tried exhaustively (all 285 consecutive pairs in
   `saves/remote/`, plus decompressed-content diffing); see "Batch save-diff
   scan" above. **Blocked**: no available save pair, however close in time,
-  isolates a small enough region. Needs either (a) a purpose-made save pair
-  bracketing exactly one quest action with nothing else changing, or
-  (b) parsing the decompressed blob's actual record structure instead of
-  diffing it as opaque bytes.
+  isolates a small enough region.
+- ~~Parse the decompressed blob's actual record structure instead of
+  diffing it as opaque bytes~~ — done for one field: see "Save summary
+  block decoded" above. Decoded the currently-tracked-quest field, but not
+  yet the full quest journal (all accepted/completed quests).
+- **Find the full quest journal / per-quest completion-state structure** in
+  the decompressed blob (the ~2.4MB region after the manifest/summary
+  section). This is what would actually show whether Casbrim's quest was
+  ever accepted or completed, independent of whether it was the tracked
+  quest. Likely candidates to try: search for other known quest name
+  strings (not just the tracked-mission phrasing) as anchors, or look for a
+  repeating record structure (count-prefixed array, similar to the
+  length-prefixed `.eco` manifest list near the start of the blob) holding
+  one entry per known quest.
+- If a fuller playthrough or new saves become available, get a
+  purpose-made save pair bracketing exactly one isolated quest action
+  (accept/turn-in) with minimal time/movement in between, and diff those —
+  the batch scan showed even a 12-second gap wasn't tight enough with the
+  existing saves, but a save made deliberately before/after interacting
+  with one specific NPC should still be far more isolated than any pair in
+  the existing 286.
 - Determine whether `word1..word4` are offsets, checksums, or something else
   — the field is still unresolved even with corrected values.
 - The file *payload* location still cannot be derived from an entry's
@@ -245,3 +262,56 @@ interact with exactly one quest NPC, quicksave again, ideally without
 walking anywhere in between), or (b) actually parsing the decompressed
 blob's internal record structure rather than diffing it as an opaque byte
 stream.
+
+## Save summary block decoded (2026-07-10) — first working quest-tracking field
+
+Pursued option (b) above: instead of diffing the decompressed blob as opaque
+bytes, looked for actual internal structure. Found a small, human-readable
+save-summary block used for the save-browser UI, present in **both** the
+main save file's decompressed blob **and**, unencoded, in the small
+`_header` file (no decompression needed for the header — much faster).
+
+**Format:** a single length-prefixed UTF-16LE string: `[uint32 LE char
+count][UTF-16LE text]`, anchored by the literal text `"Miejsce:"` (Polish
+for "Location:"). The string contains 5 newline-separated `Key: Value`
+lines:
+
+```
+Miejsce: <location>
+Czas gry: <play time, HH:MM>
+Aktywna misja: <currently tracked quest name, or "brak" ("none")>
+Poziom: <character level>
+PD: <experience>/<experience to next level>
+```
+
+Added `tw2tools.wd_format.parse_save_summary(data) -> SaveSummary | None`
+(finds the anchor, reads the length prefix 4 bytes before it, decodes and
+splits the fields) and a `tw2tools.save_summary` CLI
+(`python -m tw2tools.save_summary <path> [--json OUT]`) that prefers the
+fast `_header` file and only decompresses the main save file as a fallback.
+
+**Ran it across all 286 saves** (`save_summaries.json`): got a full
+"currently tracked quest" timeline (151 distinct mission-name transitions,
+from the base-game Polish campaign through what appear to be Pirates-DLC
+missions in English mid-history, and later DLC3/Sharyjska-forest content).
+
+**Casbrim / "Ekspercka przygoda poboczna" result:** still **not found** as
+the tracked `Aktywna misja` value in any of the 286 saves — but save
+`000203`'s location IS `"Puszcza Sharyjska"` (Sharyjska Forest, exactly the
+DLC3 zone this quest belongs to), with the tracked mission there being
+`"Las driad"` (the main DLC3 story quest), not the Casbrim side quest.
+Saves 202-208 trace the player moving through that zone tracking only the
+main story chain. This means either the side quest was never accepted in
+this playthrough, or it was accepted but never selected as the active/HUD
+quest at the moment of any of these particular saves — this field only
+records the single *currently tracked* quest, not the full quest journal
+(all accepted/in-progress/completed quests), so a passively-accepted side
+quest that's never manually tracked would not appear here even if "active"
+in the game's internal sense.
+
+**What this does answer for the main goal:** we now have a real, decoded,
+working field for *a* quest-progress signal (which quest the player has
+selected as active, per save) — a genuine first success, just not the
+specific Casbrim/Expert-Side-Adventure signal originally sought. The full
+per-quest completion/acceptance state (which would show Casbrim regardless
+of tracking) is still inside the decompressed blob somewhere, unlocated.
