@@ -720,3 +720,56 @@ itself encodes which quest or dialogue line was involved. The ID-matching
 approach, applied to `PCQ` specifically, is exhausted — further progress
 here would need actual `.eco` script decoding (still unresolved) rather
 than more numeric guessing.
+
+## Correction + stronger confirmation: cross-language ID validation (2026-07-11)
+
+Follow-up per user request: checked `DLC3_PC.wd` (not just the POL archive)
+for the English/German terms "Expert"/"Adventure"/"Gods"/"demons", since the
+game bundles multiple languages together (confirmed: chunk `1039431680`
+holds a full **German** localization dump, alongside the Polish one at
+`1041543168`).
+
+**Important correction to the previous section's methodology:** assumed
+`GROUP_<n>` numbers might correspond 1:1 across language files (e.g. POL's
+`GROUP_66` ≈ German's `GROUP_6`) — checked this directly and it's **false**.
+German's `GROUP_6`/`GROUP_8`/`GROUP_10` are a completely different quest
+("Experten Side Quest: Sehende Steine" / "Expert Side Quest: Seeing
+Stones", parts 1-3) — an unrelated quest that happens to share the generic
+English-loanword phrasing "Expert Side Quest" (apparently used as a title
+template across *many* different quests, not just Casbrim's). This means
+the earlier list of "genuinely linked" IDs (`DQ_434`, `Q_855`, `DQ_755`,
+`Q_1291`, `Q_244`, `Q_1292`) was derived from a flawed cross-language
+assumption for everything except `GROUP_2`/`Q_45`.
+
+**`GROUP_2`/`Q_45` specifically is now independently double-confirmed**,
+not assumed: German's `GROUP_2` is directly followed by the title
+`"Expert Side Quest: Götter und Dämonen"` (German for "Gods and Demons") —
+an exact semantic match to the Polish quest, at the same `GROUP_2` number,
+in a completely different language file. This makes `Q_45` the single most
+reliably-confirmed real quest ID found so far (cross-validated in Polish
+*and* German, not just proximity in one file).
+
+**Re-ran the property-value check with this stronger confirmation, and
+fixed a gap in the earlier check** (`45` had been excluded from the
+original exhaustive scan for being too common as a raw substring — but an
+*exact property value* match is precise regardless of how common the raw
+digits are elsewhere). Checked:
+- `45` as an exact property value for Casbrim/Elven Gardener across all
+  286 `saves/remote/` saves plus both `quest_saves` saves: **zero
+  matches**.
+- `45` as a value in *any* property bag at all (not entity-scoped) across
+  all 969 property bags found in `quest_saves/000282.TwoWorldsIISave`:
+  **zero matches**.
+
+**Strengthened conclusion:** even the single most rigorously
+cross-language-confirmed quest ID for "Gods and Demons" does not appear
+anywhere in the save's property-bag system — not attached to Casbrim, not
+attached to any other entity, not anywhere in a full save's ~969 bags. This
+rules out (with much higher confidence than before) the idea that quest
+acceptance/completion is tracked via a `Q_<id>`-referencing property
+bag anywhere in this system. The actual quest-journal/completion state, if
+it exists as an explicit save-file structure at all, must use a completely
+different mechanism than named property bags — most likely a raw
+numeric-ID table this investigation hasn't located, or logic embedded in
+the (still unparsed) `.eco` scripts that isn't persisted as an explicit
+"quest state" record the way one might expect.
