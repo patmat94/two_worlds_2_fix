@@ -130,15 +130,22 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   diffing it as opaque bytes~~ — done for one field: see "Save summary
   block decoded" above. Decoded the currently-tracked-quest field, but not
   yet the full quest journal (all accepted/completed quests).
-- **Find the full quest journal / per-quest completion-state structure** in
-  the decompressed blob (the ~2.4MB region after the manifest/summary
-  section). This is what would actually show whether Casbrim's quest was
-  ever accepted or completed, independent of whether it was the tracked
-  quest. Likely candidates to try: search for other known quest name
-  strings (not just the tracked-mission phrasing) as anchors, or look for a
-  repeating record structure (count-prefixed array, similar to the
-  length-prefixed `.eco` manifest list near the start of the blob) holding
-  one entry per known quest.
+- ~~Find the full quest journal / per-quest completion-state structure~~ —
+  found the generic named-flag record system and a `find_named_records`
+  scanner + `flag_timeline` CLI for it (see "Named flag/record system
+  found" above), and pinpointed exactly when Casbrim-related content loads
+  (save `000181`). **Still open:** every Casbrim-named flag found so far
+  tracks *zone/NPC-content loading*, not quest accept/completion
+  specifically — no flag with an "SP3"/"SideAdventure"/"Expert" naming
+  convention was found. Two ways to close this gap:
+  - Decode the generic record's trailing value fields well enough to tell
+    "not yet true" from "true" (the `(0, 9999, 0, 0, 0)` pattern needs a
+    contrasting example — ideally a flag known to be false in some saves
+    and true in others — to find what the "false" state looks like).
+  - Try more candidate names with `find_named_records`/`flag_timeline`
+    (e.g. names built from `SP3`, `SideAdventure`, `Ekspercka` transliterated
+    to ASCII, or quest-giver-NPC-based naming patterns inferred from how
+    `CasbrimTriggered` was named after the NPC, not the quest).
 - If a fuller playthrough or new saves become available, get a
   purpose-made save pair bracketing exactly one isolated quest action
   (accept/turn-in) with minimal time/movement in between, and diff those —
@@ -315,3 +322,63 @@ selected as active, per save) — a genuine first success, just not the
 specific Casbrim/Expert-Side-Adventure signal originally sought. The full
 per-quest completion/acceptance state (which would show Casbrim regardless
 of tracking) is still inside the decompressed blob somewhere, unlocated.
+
+## Named flag/record system found (2026-07-10) — pinpointed save 181, but it's zone-load, not quest-completion
+
+Directly searched every save's decompressed blob (not just the tracked-quest
+field) for the literal strings `Casbrim` / `Ekspercka przygoda poboczna` /
+`Bogowie i demony`. Result: `Casbrim` (ASCII) **is** present, in 105 of the
+286 saves (`000181`-`000280`, plus separate save slots `020001`, `090000`-
+`090003`) — but the two Polish quest-title phrases are still never found as
+raw strings inside any save.
+
+Inspecting the bytes around each `Casbrim` hit revealed a generic named
+key-value record format used throughout the decompressed blob for
+script/world state: `[uint32 LE name length][ASCII name][value bytes...]`.
+Added `tw2tools.wd_format.find_named_records(data, min_length=3,
+max_length=64) -> list[NamedRecord]` (generic scanner for this format,
+~0.4s for a 2.4MB save blob) and used it to enumerate all ~3200 candidate
+names in save `000181`. Casbrim-related names found:
+
+- `CasbrimTriggered` — a named flag record; trailing value is constant
+  `(0, 9999, 0, 0, 0)` (as `uint32` words) everywhere it appears — looks
+  like a fixed "fired" sentinel, not an incrementing counter.
+- `DLC3_CHANCELLOR_CASBRIM` — confirms Casbrim's in-game title is
+  "Chancellor Casbrim".
+- `ShadinarGardenCasbrim`, `ShadinarCasbrimOffice` — named locations (his
+  garden/office in Shadinar, the DLC3 hub city).
+- `PortraitUpCasbrim` — a dialogue-portrait UI state name.
+- `DLC3_Casbrim_Ring` — an item identifier (matches the `.wd` archive
+  localization finding from the earlier toolkit run).
+- Also found (not Casbrim-specific but relevant): `Quests\TWII_DLC_SP3.dat`
+  /`.lan`/`.qtx` — likely the internal codename for this DLC's quest data
+  file ("SP3" plausibly "Side Plot/Adventure 3"), but only as a
+  file-manifest reference, not a distinct per-player completion flag.
+
+Added `tw2tools.flag_timeline` CLI (`python -m tw2tools.flag_timeline
+<saves_dir> --name NAME [...] [--json OUT]`) to track named-flag
+presence/absence across a save history using the exact names above, and ran
+it against all 286 saves. **All six Casbrim-related flags transition from
+absent to present at the exact same save: `000180` (absent) → `000181`
+(present)**, and stay present through every later save. Because *all* of
+them — including the unrelated-seeming item (`DLC3_Casbrim_Ring`) and
+location names — flip together at one single save, this is almost
+certainly a **one-time zone/NPC-content load event** (entering Shadinar,
+where Chancellor Casbrim resides, for the first time), not a per-quest-step
+completion marker. No distinct flag using an "SP3"/"SideAdventure"/"Expert"
+naming convention was found to represent quest acceptance or completion
+specifically.
+
+**Where this leaves the main goal:** we now have three real, decoded,
+working signals — the tracked-quest field, the zone-load flag batch, and a
+generic named-record scanner for finding more — but none of them yet
+distinguish "Casbrim's side quest was accepted/completed" from "the player
+entered the zone where Casbrim lives." The specific per-quest
+accept/complete state is either (a) tracked under a numeric quest ID rather
+than a name string (would need parsing an ID-indexed table, not
+name-search), or (b) tracked under a completion-flag name we haven't
+guessed yet — `find_named_records` makes guessing-and-checking new
+candidate names fast, but the next real target is understanding the
+generic record's value-field layout (the `(0, 9999, 0, 0, 0)` trailing
+words) well enough to tell a "not yet true" record from a "true" one,
+rather than only detecting a record's mere presence.
