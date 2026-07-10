@@ -162,17 +162,21 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   existing saves, but a save made deliberately before/after interacting
   with one specific NPC should still be far more isolated than any pair in
   the existing 286.
-- Determine whether `word1..word4` are offsets, checksums, or something else
-  — the field is still unresolved even with corrected values.
-- The file *payload* location still cannot be derived from an entry's
-  metadata using the current record fields — path metadata is present, but
-  nothing in `type_id`/`flags`/`word1..word4` yet maps to where the actual
-  file bytes live.
-- Even once `word1..word4` are resolved, mapping metadata to the real file
-  payload for an entry like `DLC_3.eco` is a separate, still-open problem:
-  `tw2tools.extract` only pulls out whole zlib blocks and `tw2tools.list_entries`
-  only parses/prints entry metadata — neither performs metadata-to-payload
-  mapping or extracts an individual file's bytes.
+- ~~Determine whether `word1..word4` are offsets, checksums, or something
+  else~~ / ~~find the file payload location from entry metadata~~ — pursued
+  with a real 7,057-entry statistical sample from the full `DLC3_PC.wd`
+  archive; see "`word1..word4` / payload-location investigation with a
+  real large sample" above. **Genuinely blocked** via static analysis:
+  local-offset, global-concatenated-stream-offset (multiple field
+  interpretations), CRC32-of-path-hash, and raw-archive-file-offset were
+  all tested against a real anchor entry and none produced a valid file
+  signature. Refined understanding: `type_id` plausibly = size, `flags` =
+  small attribute bitfield, but the "word1/word4 only carry their high
+  byte" pattern seen on one entry does **not** generalize (only ~18% of
+  entries have this). Next step here would need dynamic analysis (a
+  debugger attached to the running game while it loads a known asset) —
+  not more static-guessing, which has now covered every cheap-to-test
+  interpretation without success.
 
 ## Notes for AI models
 
@@ -433,3 +437,69 @@ being explicit: nothing found so far *proves* `CasbrimTriggered` is even
 related to this specific side quest rather than some other Casbrim
 interaction (e.g. a generic first-meeting dialogue) — the link is
 NPC-name-based, not quest-ID-based.
+
+## `word1..word4` / payload-location investigation with a real large sample (2026-07-10)
+
+Switched to the `.wd`/`.eco` side per user direction. Previous analysis of
+`word1..word4` was based on just 2-3 hand-picked entries from one 1.4MB
+chunk. This time, decompressed the **entire** 1.9GB `DLC3_PC.wd` archive
+in memory (no chunk files written to disk — ~20s to decompress 22,318
+blocks totaling ~4.9GB, using `decompress_all_blocks` + `parse_archive_entries`
+directly), yielding **7,057 real archive entries** — a genuine statistical
+sample instead of a handful of examples.
+
+**Refined/validated the earlier word-order correction.** The
+`-LevelsCopies-\Map_20_C02_NewAC2.bmp` entry (the exact example from the
+original hand-transcribed notes) now has a fully-explained discrepancy:
+- `word2` and `word3` match the original notes **exactly**, no correction
+  needed: `word2 = 0x38000095`, `word3 = 0x00000400` (1024).
+- `word1` and `word4` match the original notes only in their **high byte**:
+  `word1 = 0xc1000000` (high byte `0xc1` = the original note's
+  `word1 = 0x000000c1`), `word4 = 0x24000000` (high byte `0x24` = the
+  original note's `word4 = 0x00000024`).
+- Checked this "low 3 bytes are padding/unused, only the high byte of
+  word1/word4 carries a small meaningful value" idea against the full
+  7,057-entry sample: **it does not hold universally** — only ~18% of
+  entries have `word1`'s or `word4`'s low 3 bytes equal to zero (word2: 1.6%,
+  word3: 0.4%). So the "high byte only" pattern seen for this one BMP entry
+  is not a fixed rule for the whole footer format; `word1`/`word4` do carry
+  real information in their low bytes for most entries. `type_id` varies
+  plausibly with per-file size across a `.dds`/`.bmp` sample (spanning
+  ~6.8KB-60KB, consistent with small game textures), supporting the
+  existing "likely a size field" hypothesis. `flags` takes small
+  repeating values (0, 1, 3, 56, 57, 62, ...), consistent with a small
+  bitfield/attribute set.
+
+**Tested and falsified several payload-location hypotheses** for the
+`Map_20_C02_NewAC2.bmp` anchor entry (`type_id=8440, word1=3238002688,
+word2=939524245, word3=1024, word4=603979776`), checking each candidate
+byte position for a recognizable file signature (`BM` for BMP, `DDS ` for
+DDS) or otherwise plausible content:
+- **Local offset within the entry's own decompressed chunk** (`word3=1024`
+  as a byte offset into the 1.4MB metadata chunk): bytes at that position
+  are more metadata-shaped, not a BMP header.
+- **Global offset into the full ~4.9GB concatenated decompressed stream**
+  (built the actual cumulative offset table across all 22,318 blocks and
+  checked): tried `word1`, `word2`, `word4` both raw and with only the low
+  3 bytes — none land on a `BM`/`DDS ` signature. One (`word2` low-3-bytes
+  interpreted locally) happened to land back inside the *same metadata
+  chunk* near a `.bmp` extension fragment — a coincidental hit on
+  manifest text, not a payload.
+- **CRC32 of the path string** (as a hash-table-lookup key, several
+  case/slash variants tried): no match against any of `word1..word4` or
+  `type_id`.
+- **Raw offset into the original compressed archive file** (not the
+  decompressed stream — `word1` exceeds the 1.9GB file size so is ruled out
+  immediately; `word2`/`word4` are in-range but the bytes there are neither
+  a zlib signature nor a recognizable file header).
+
+**Honest conclusion:** the payload-location mechanism is still unresolved,
+now having ruled out every direct-offset/hash interpretation that's cheap
+to test from static analysis alone. Likely explanations for what's left:
+the footer fields may reference an indirect lookup structure (an index
+table elsewhere in the archive, keyed by something not yet identified) that
+static field-guessing can't find by inspection; or correctly decoding this
+would need dynamic analysis (attaching a debugger to the actual game
+process while it loads a known asset, to see which field is used and how)
+rather than further static guessing, which has now covered every
+"obvious" interpretation without success.
