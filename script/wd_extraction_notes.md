@@ -155,19 +155,33 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   independently-changing NPC (Queen Arbellen) the user mentioned. Added
   `tw2tools.wd_format.parse_property_bags` +
   `tw2tools.entity_property` CLI for this.
-- **New next step:** find the value `PCQ` takes on *completion* of the
-  Expert Side Adventure (not just acceptance). The full 286-save history
-  only shows `PCQ` reach `853` (the settled post-conversation state after
-  accepting) and never advance further — this playthrough doesn't cover
-  completing the quest. Would need another purpose-made save pair
-  bracketing the quest's turn-in/completion moment, same technique as
-  above (`entity_property.py --entity DLC3_CHANCELLOR_CASBRIM --prop PCQ`
-  across the new pair, or a `parse_property_bags` diff for any other
-  properties that change).
-- The numeric-ID-indexed quest table (as opposed to the named-entity
-  property bags now decoded) and the `.wd`/`.eco` payload-location problem
-  remain open per the sections above, but are lower priority now that a
-  working quest-progress signal exists for at least acceptance.
+- ~~Find the value `PCQ` takes on completion~~ — attempted via ID-matching
+  against `.wd` dialogue content; see "Quest-ID matching approach:
+  confirmed dead end" above. **Genuinely blocked**: `PCQ`'s value doesn't
+  reference this quest's own dialogue-ID namespace (checked exhaustively,
+  zero matches across all 286 saves). Would still need another
+  purpose-made save pair bracketing the quest's turn-in/completion moment
+  to observe the real completion value directly (the ID-matching shortcut
+  doesn't work, but direct before/after observation — the technique that
+  *did* work for acceptance — still would).
+- ~~Try editing the save to make Casbrim appear/progress the quest~~ —
+  done; see "Save-editing experiment: patched Casbrim's position" above.
+  **Position/rotation editing works mechanically** (`patch_zlib_block`,
+  confirmed by the user loading the patched save) but **does not progress
+  quest logic** — presence alone isn't causally linked to script-side
+  quest state, which still requires `.eco` decoding to control directly.
+- ~~Check whether more than one Casbrim-related spot exists~~ — yes: found
+  5 distinct named Casbrim position markers in `DLC3_PC.wd`'s level data
+  (see "Multiple named Casbrim positions" above). This reframes the
+  original "broken" position as a different *legitimate* named spot
+  (`casbrim here`), not corrupted data — the real bug is in whatever
+  script logic selects which named spot to use for a given story stage,
+  which we can't see from the save file alone.
+- The numeric-ID-indexed quest table, the `.wd`/`.eco` payload-location
+  problem, and actually decoding the level/quest script logic that selects
+  between named position markers all remain open — these would need
+  `.eco` payload extraction (still unresolved) to make further progress,
+  since that's where the actual scripted logic lives.
 - ~~Determine whether `word1..word4` are offsets, checksums, or something
   else~~ / ~~find the file payload location from entry metadata~~ — pursued
   with a real 7,057-entry statistical sample from the full `DLC3_PC.wd`
@@ -594,3 +608,115 @@ available saves) — but the technique (property-bag diff between a tightly
 bracketed save pair, then read the specific property across a full
 history) is now proven and reusable for any NPC/quest, given a similar
 purpose-made save pair.
+
+## Save-editing experiment: patched Casbrim's position (2026-07-11)
+
+Added `tw2tools.wd_format.patch_zlib_block(data, offset, new_decompressed)`
+(decompresses at `offset`, tracks exactly how many original compressed
+bytes to replace via a new `_decompress_at_ex` helper, recompresses caller-
+supplied replacement bytes, and splices them back in) to test a real
+hypothesis on the user's actual save `saves/remote/000280.TwoWorldsIISave`
+(Casbrim's NPC model doesn't render in-game for this save, despite all
+quest/zone-load flags looking "correct").
+
+Comparing Casbrim's full transform (rotation + position, 20 floats read
+right after his name) between save `000280` and the confirmed-visually-
+working `quest_saves/000282` found a real difference: identity rotation
+and position `(3326, 3313, 401)` in `000280` vs. a real rotation and
+position `(2202, 1356, 308)` in `000282`. Patched `000280`'s copy of those
+7 float values (2x2 rotation submatrix + XYZ) to the `000282` values,
+recompressed via `patch_zlib_block`, and wrote the result to a **new** file
+(`files/quest_saves/000280_casbrim_repositioned.TwoWorldsIISave`; the
+user's original save was never modified). **Result: the user loaded the
+patched file and Casbrim's NPC model did appear at the new position** —
+confirming position/rotation is a real, editable lever, and that our
+transform-field identification was correct. **However, the quest itself did
+not progress** — his presence alone doesn't drive quest/dialogue logic
+(unsurprising in hindsight: that's presumably handled by the `.eco` script
+layer, which is still unparsed).
+
+## Multiple named Casbrim positions found in `DLC3_PC.wd` level data (2026-07-11)
+
+Checked whether `DLC3_PC.wd` (not just `DLC3_PC_POL.wd`) contains
+Casbrim/quest-related content — it does, far more extensively: searching
+the fully-decompressed archive (~22,318 blocks) for `Casbrim` found **257
+hits across 65 different chunks** (vs. 72 hits in one chunk for
+`DLC3_PC_POL.wd`). Two chunks (`1039431680`, `1041543168`) hold ~67 hits
+each and appear to be full localization-text dumps (including the same
+`GROUP_66/86/106/2` + "Ekspercka przygoda poboczna" text found earlier in
+the POL archive) — likely a multi-language bundle. The other ~63 chunks
+have small, consistent hit counts (mostly 3) and turned out to be **level
+design / scene data**, not text: named object markers like `MARKER`,
+`MARKER_CHEST` (e.g. "chest for books 1"), and — critically — multiple
+**distinct named Casbrim position markers**, each preceded by its own XYZ
+float triplet:
+
+| Marker | Position (X, Y, Z) | Matches |
+|---|---|---|
+| `casbrim mid-game` | (2202.7, 1355.3, 308.2) | the confirmed-working `quest_saves/282` position used for the patch above |
+| `casbrim here` | (3324.3, 3298.1, 401.6) | save `000280`'s *original* (pre-patch) position |
+| `Casbrim's Spot` | (554.0, 1349.2, 308.5) | a third distinct position |
+| `Casbrim CQ` | (3217.3, 2280.7, 305.6) | a fourth distinct position |
+| `tele Casbrim BeforeAD` | (2841.5, 2724.0, 310.9) | a teleport point |
+
+**This changes the interpretation of the earlier patch.** Save `000280`'s
+"broken" position isn't corrupted/garbage data — it's the real, named
+`casbrim here` marker, a legitimate level-design position. So the actual
+mechanism controlling which of these named spots gets written into a given
+save must live in level/quest script logic (which marker to teleport him to
+for which story stage), not in the save's position field being simply
+right-or-wrong. The save file just records whichever position the (still
+unparsed) script logic last set — explaining why the patch worked
+mechanically (any valid named position renders him) without progressing
+the quest (rendering ≠ triggering script-side quest state).
+
+## Cross-checked the technique on a second NPC (Queen Arbellen) (2026-07-11)
+
+To test generality rather than relying on Casbrim alone:
+
+- **`Lector` self-reference confirmed again:** Arbellen's property bag is
+  `PCQ=2694, PSDN=0, PQUS=2, Lector=3247, PUMN=22`; `Name_3247` in the POL
+  localization archive decodes to `"Królowa Arbellen"` (Queen Arbellen) —
+  an exact match, same pattern as Casbrim's `Lector=3231` → `Name_3231` →
+  `"Kanclerz Casbrim"`. `Lector` reliably self-identifies any NPC.
+- **Also has multiple named identity variants** in `DLC3_PC.wd`:
+  `DLC3_QUEEN_ARBELLEN`, `DLC3_QUEEN_ARBELLEN_YOUNG` (plus `#`-wrapped
+  template-looking versions of each) — a young/present duality, presumably
+  for a flashback or time-skip story beat. Didn't find the same
+  multi-named-position pattern as Casbrim in the quick pass done, but this
+  wasn't exhaustively searched.
+- Confirms the `Lector`/property-bag structure is a general per-NPC
+  convention, not something specific to Casbrim.
+
+## Quest-ID matching approach: confirmed dead end (2026-07-11)
+
+Directly tested whether `PCQ`'s observed numeric values (`20`, `3483`,
+`3484`, `853`, `149`, `878`, `2694`) correspond to real dialogue-content IDs
+in the POL localization archive:
+
+- Found a real `Q_<id>`/`DQ_<id>_<n>.FT_<n>` dialogue-line ID system (449
+  `Q_` entries in one chunk alone) and confirmed several `PCQ` values DO
+  exist as `Q_`/`DQ_` IDs somewhere in the file (e.g. `Q_853`, `Q_3483`) —
+  but reading the actual dialogue text at those IDs revealed they belong to
+  **entirely unrelated storylines** (`DQ_3483` is about recovering a "Kula"
+  orb; `DQ_853` is about the "Dar Pha" princess questline, a different
+  DLC). This is because character names, dialogue lines, and quest IDs all
+  appear to share **one global auto-incrementing ID pool** across the
+  entire game — any specific number will coincidentally match *something*
+  unrelated.
+- To get *real* signal instead of coincidence, located the genuinely
+  Casbrim/Ekspercka-linked dialogue IDs by anchoring on the actual quest
+  title text's `GROUP_66/86/106/2` locations: `DQ_434`, `Q_855`, `DQ_755`,
+  `Q_1291`, `Q_244`, `Q_1292`, `Q_45`.
+  **Checked exhaustively whether any of these ever appear as a `PCQ` (or
+  any other) property value for Casbrim or the Elven Gardener, across all
+  286 saves in `saves/remote/` — zero matches, anywhere.**
+
+**Conclusion:** `PCQ`'s value does not reference this quest's own
+dialogue-ID namespace. It's likely a generic per-NPC conversation-state
+counter whose *change* correlates with an interaction happening (which is
+why the before/after pair worked as a detection signal), not a value that
+itself encodes which quest or dialogue line was involved. The ID-matching
+approach, applied to `PCQ` specifically, is exhausted — further progress
+here would need actual `.eco` script decoding (still unresolved) rather
+than more numeric guessing.
