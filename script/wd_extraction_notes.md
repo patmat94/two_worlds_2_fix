@@ -144,3 +144,53 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
 - Treat `type_id` as likely file size and `flags` as a small attribute field.
 - The presence of `ECO` and UTF-16 text in the larger stream suggests mixed encoding and data layout.
 - The extraction logic must be based on metadata mapping, not just local chunk offsets.
+
+## Toolkit findings (2026-07-10)
+
+- Full extraction of `DLC3_PC_POL.wd` via `tw2tools.extract` produced 189 blocks
+  (matches the previously reported 189 exactly).
+- `.eco` entry count across the full extraction: 0 (`list_entries wd_extract
+  --filter .eco` found no entries with a `.eco` extension anywhere in the
+  extracted blocks; `wd_extract/eco_entries.json` is an empty `[]`).
+- Casbrim / "Ekspercka przygoda poboczna" search across the full extraction:
+  **found** — 72 total matches (`search_text wd_extract --term Casbrim --term
+  "Ekspercka przygoda poboczna"`), 68 for `Casbrim` and 4 for `Ekspercka
+  przygoda poboczna`. All matches are UTF-16-LE or ASCII text embedded inside
+  decompressed block files, not inside any `.eco`-typed entry:
+  - `Casbrim` first appears in `DLC3_PC_POL_chunk_00017000.bin` at offset
+    76423 (UTF-16-LE) as part of a tip string: `"Tip_128" -> "Casbrim i
+    Lagin"`. The bulk of the remaining 67 `Casbrim` matches (both ASCII and
+    UTF-16-LE encodings) are clustered in
+    `DLC3_PC_POL_chunk_00090800.bin`, including an item identifier
+    `"DLC3_Casbrim_Ring"` at offset 123373 (ASCII).
+  - All 4 `"Ekspercka przygoda poboczna"` matches are UTF-16-LE and all
+    located in `DLC3_PC_POL_chunk_00090800.bin`, at offsets 856935, 874707,
+    882146, and 911558. Each is preceded by a `GROUP_<n>` label (e.g.
+    `GROUP_66`, `GROUP_86`, `GROUP_106`, `GROUP_2`), consistent with a quest
+    dialogue/text group table. The match at offset 911558 continues past
+    the search window into `"Ekspercka przygoda poboczna: Bogow..."`,
+    i.e. the string is truncated mid-way through the full localized quest
+    title `"Ekspercka przygoda poboczna: Bogowie i demony"` — the full title
+    is present in the archive, split only by the 32-byte search context
+    window used for the excerpt, not by any encoding boundary.
+  - Both strings live in the same localization-text block
+    (`DLC3_PC_POL_chunk_00090800.bin`), strongly suggesting Casbrim (an NPC)
+    and the "Ekspercka przygoda poboczna: Bogowie i demony" quest are part
+    of the same quest/dialogue text group in this block, but neither string
+    was found associated with any `.eco` entry — quest *progress* state is
+    therefore still not evidenced anywhere in this `.wd` archive; this
+    archive appears to hold only display/localization text, not
+    save-compatible quest-state markers.
+- `diff_saves` between `saves/remote/000000` (583786 bytes) and `000001`
+  (581898 bytes): exactly **one** changed region — a single `replace` op,
+  `a[2088:583786]` (581698 bytes) -> `b[2088:581898]` (579810 bytes). The
+  first 2088 bytes of both saves are byte-identical (a fixed-size
+  header/preamble), and essentially the entire remainder of the file
+  differs as one contiguous replaced block reflecting the size delta
+  (-1888 bytes) between the two snapshots — consistent with a
+  variable-length serialized game-state section (inventory/quest/world
+  state) that grows or shrinks between saves, rather than a small,
+  localized quest-flag toggle. Pinpointing a quest-specific byte range
+  will require diffing saves that bracket a single, isolated quest-state
+  change (see "Next likely steps" above), not just two sequential
+  autosaves.
