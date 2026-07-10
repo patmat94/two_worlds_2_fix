@@ -142,26 +142,32 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   `*Triggered` flags found have per-trigger-type-constant (not
   per-progress) values. This path is exhausted without new information —
   continuing to guess candidate names has hit diminishing returns.
-- **Remaining real options** (need a decision, not just more guessing):
-  1. Get a purpose-made save pair (see below) and diff it — would reveal
-     *some* byte change tied to the specific action, even without knowing
-     its name/structure in advance, which the named-flag approach can't do
-     for state that isn't stored as a named record at all (e.g. a bare
-     numeric quest-ID table entry).
-  2. Find and parse the numeric-ID-indexed quest table directly (a much
-     bigger reverse-engineering task — would need to locate a repeating
-     fixed-size record array in the blob and correlate positions with
-     known quest IDs, which we don't have a source for yet).
-  3. Accept the `.wd`/`.eco` side as a parallel, currently more tractable
-     avenue (`.eco` payload extraction — see below) instead of continuing
-     to push on save-file quest state.
-- If a fuller playthrough or new saves become available, get a
-  purpose-made save pair bracketing exactly one isolated quest action
-  (accept/turn-in) with minimal time/movement in between, and diff those —
-  the batch scan showed even a 12-second gap wasn't tight enough with the
-  existing saves, but a save made deliberately before/after interacting
-  with one specific NPC should still be far more isolated than any pair in
-  the existing 286.
+- ~~Get a purpose-made save pair and diff it~~ — **done, and it worked.**
+  See "Breakthrough: quest-progress found via a purpose-made save pair"
+  above. The user provided `files/quest_saves/000281.TwoWorldsIISave`
+  (before accepting) / `000282.TwoWorldsIISave` (after accepting).
+  Whole-file diffing still failed the same way, but diffing the *sets of
+  named records* between the two saves found both a new marker
+  (`SE_Garden_D_GAP`) and, more importantly, the per-entity property-bag
+  structure (`PCQ`/`PSDN`/`PQUS`/`Lector`/`PUMN`) — confirmed `PCQ` is the
+  quest-relevant field by observing only 2 of 16 `PCQ` records change
+  between the saves, one next to Casbrim, the other next to the
+  independently-changing NPC (Queen Arbellen) the user mentioned. Added
+  `tw2tools.wd_format.parse_property_bags` +
+  `tw2tools.entity_property` CLI for this.
+- **New next step:** find the value `PCQ` takes on *completion* of the
+  Expert Side Adventure (not just acceptance). The full 286-save history
+  only shows `PCQ` reach `853` (the settled post-conversation state after
+  accepting) and never advance further — this playthrough doesn't cover
+  completing the quest. Would need another purpose-made save pair
+  bracketing the quest's turn-in/completion moment, same technique as
+  above (`entity_property.py --entity DLC3_CHANCELLOR_CASBRIM --prop PCQ`
+  across the new pair, or a `parse_property_bags` diff for any other
+  properties that change).
+- The numeric-ID-indexed quest table (as opposed to the named-entity
+  property bags now decoded) and the `.wd`/`.eco` payload-location problem
+  remain open per the sections above, but are lower priority now that a
+  working quest-progress signal exists for at least acceptance.
 - ~~Determine whether `word1..word4` are offsets, checksums, or something
   else~~ / ~~find the file payload location from entry metadata~~ — pursued
   with a real 7,057-entry statistical sample from the full `DLC3_PC.wd`
@@ -503,3 +509,88 @@ would need dynamic analysis (attaching a debugger to the actual game
 process while it loads a known asset, to see which field is used and how)
 rather than further static guessing, which has now covered every
 "obvious" interpretation without success.
+
+## Breakthrough: quest-progress found via a purpose-made save pair (2026-07-10)
+
+The user provided exactly what earlier notes called for: `files/quest_saves/000281.TwoWorldsIISave`
+(right before accepting the Expert Side Adventure quest from Casbrim) and
+`000282.TwoWorldsIISave` (right after accepting it), noting that an
+unavoidable second questline also updated at the same moment (talking to
+Casbrim triggers updates in both).
+
+**Whole-file/decompressed-blob diffing still doesn't help** — even this
+tightly-bracketed pair (file sizes differ by only ~200 bytes) produces the
+same single "changes from offset 2088 to EOF" region as every other pair
+tried. The trailing-noise problem is real regardless of how minimal the
+actual change is.
+
+**But comparing the *set of named records* between the two saves worked.**
+Ran `find_named_records` on both saves' decompressed blobs and diffed the
+resulting name sets: one genuinely new record appeared in save `000282`
+that wasn't in `000281`: `SE_Garden_D_GAP` (immediately followed by what
+look like 3D position floats in the same value range as Casbrim's own
+position — almost certainly a new marker/trigger spawned in Casbrim's
+garden as part of the quest's next stage). ("SE" plausibly "Side
+Event"/"Side Encounter".)
+
+**Found and decoded the save's per-entity property-bag structure.**
+Comparing all occurrences of the literal 3-character tag `PCQ` between the
+two saves (found by locating each `PCQ`'s own length-prefix, since `PCQ` is
+itself a length-prefixed ASCII string) turned up 16 `PCQ` records in each
+save. **Exactly two changed value; the other 14 were byte-identical.** The
+two that changed were both found sitting inside the same structure,
+immediately preceded (within ~130-400 bytes) by a recognizable entity name:
+
+```
+[entity ID/hash header, ~16 bytes]
+[len][entity_name]                  e.g. "DLC3_CHANCELLOR_CASBRIM"
+[transform data: position/rotation/scale floats, ~150 bytes]
+[sentinel fields: runs of 0xFFFFFFFF]
+[count: uint32]                     e.g. 5
+[count x ([len][key][len][value])]  e.g. PCQ=3483, PSDN=0, PQUS=2, Lector=3231, PUMN=23
+```
+
+- The `PCQ` record next to `DLC3_CHANCELLOR_CASBRIM` changed `3484` (save
+  `000281`, before accepting) → `3483` (save `000282`, after accepting).
+- The *other* changed `PCQ` record sits next to `DLC3_QUEEN_ARBELLEN` —
+  confirming this is exactly the "unavoidable second questline" the user
+  described — and changed `878` → `2694` (a much bigger jump, consistent
+  with that questline having advanced by more than one atomic step, unlike
+  the clean single-decrement for Casbrim).
+- All other 14 `PCQ` records (for 14 other NPCs) are identical in both
+  saves — strong evidence `PCQ` really is a per-NPC quest/dialogue-state
+  value, not incidental noise.
+
+Added `tw2tools.wd_format.parse_property_bags(data, min_props=1,
+max_props=10) -> list[PropertyBag]` (the generic `[count][key][value]...`
+scanner) and `tw2tools.entity_property` CLI (`python -m
+tw2tools.entity_property <saves_dir> --entity NAME --prop KEY [--json
+OUT]`) — tries every occurrence of the entity name in turn (an entity's
+name can appear multiple times; not all are immediately followed by a
+property bag) and reports the property value per save.
+
+**Ran it across the full 286-save history for `DLC3_CHANCELLOR_CASBRIM`'s
+`PCQ`.** Result: absent through save `000185`; then a repeating cycle each
+time the player (re-)visits Casbrim: `20` → `3483` → `853`, with the value
+reverting to `None` when the player leaves the zone (saves `000221`-`225`)
+and the same `20`→`3483`→`853` cycle repeating on the next visit
+(saves `000226`-`240`). From save `000240` onward through the end of
+available data (`000280`), `PCQ` stays constant at `853` — i.e. this
+playthrough accepted the quest (the `3483` step, confirmed by the user's
+pair) and reached the settled post-conversation state (`853`), but does not
+show any further progression (no third value appears) within the covered
+saves — consistent with the "Aktywna misja" field never showing this quest
+as tracked (from the earlier save-summary work): the quest was accepted but
+this playthrough's available saves don't capture it being completed.
+
+**What this means for the main goal:** we now have a concrete, validated,
+reusable way to read *quest-relevant NPC state* per save — not a guess, but
+directly confirmed against a real known "before/after accepting a specific
+quest" pair. `PCQ` most likely encodes a dialogue/conversation-node index
+rather than a strict boolean, so distinguishing "accepted" from "completed"
+for a given quest would mean identifying what value corresponds to
+completion (not yet known for this quest, since it isn't reached in the
+available saves) — but the technique (property-bag diff between a tightly
+bracketed save pair, then read the specific property across a full
+history) is now proven and reusable for any NPC/quest, given a similar
+purpose-made save pair.
