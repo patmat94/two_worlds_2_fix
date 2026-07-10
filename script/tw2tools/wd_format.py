@@ -109,3 +109,47 @@ def parse_archive_entries(data: bytes) -> list[ArchiveEntry]:
         )
         pos = data_pos + ENTRY_FOOTER_SIZE
     return entries
+
+
+SEARCH_ENCODINGS = ("ascii", "utf-16-le")
+
+
+@dataclass
+class Match:
+    term: str
+    encoding: str
+    offset: int
+    context: str
+
+
+def _context(data: bytes, offset: int, length: int, radius: int = 16) -> str:
+    start = max(0, offset - radius)
+    end = min(len(data), offset + length + radius)
+    snippet = data[start:end]
+    printable = "".join(chr(b) if 32 <= b < 127 else "." for b in snippet)
+    return f"{snippet.hex(' ')} | {printable}"
+
+
+def search_text_multi(data: bytes, terms: list[str]) -> list[Match]:
+    matches: list[Match] = []
+    for term in terms:
+        for encoding in SEARCH_ENCODINGS:
+            try:
+                needle = term.encode(encoding)
+            except UnicodeEncodeError:
+                continue
+            start = 0
+            while True:
+                idx = data.find(needle, start)
+                if idx == -1:
+                    break
+                matches.append(
+                    Match(
+                        term=term,
+                        encoding=encoding,
+                        offset=idx,
+                        context=_context(data, idx, len(needle)),
+                    )
+                )
+                start = idx + 1
+    return matches

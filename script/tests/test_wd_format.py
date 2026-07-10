@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -85,3 +85,21 @@ def test_parse_archive_entries_matches_known_real_chunk():
         5,
         704643072,
     )
+
+
+def test_search_text_multi_finds_ascii():
+    data = b"padding" + "Casbrim".encode("ascii") + b"padding"
+    matches = search_text_multi(data, ["Casbrim"])
+    assert any(m.encoding == "ascii" and m.offset == 7 for m in matches)
+
+
+def test_search_text_multi_finds_utf16le_including_polish_diacritics():
+    needle = "Ekspercka przygoda poboczna".encode("utf-16-le")
+    data = b"\x00\x00" + needle + b"\x00\x00"
+    matches = search_text_multi(data, ["Ekspercka przygoda poboczna"])
+    assert any(m.encoding == "utf-16-le" and m.offset == 2 for m in matches)
+
+
+def test_search_text_multi_no_match_returns_empty_list():
+    data = b"nothing interesting here"
+    assert search_text_multi(data, ["Casbrim"]) == []
