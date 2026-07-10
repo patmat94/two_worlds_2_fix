@@ -177,11 +177,24 @@ Real game data now lives under `files/Two Worlds 2/` (gitignored):
   (`casbrim here`), not corrupted data — the real bug is in whatever
   script logic selects which named spot to use for a given story stage,
   which we can't see from the save file alone.
-- The numeric-ID-indexed quest table, the `.wd`/`.eco` payload-location
-  problem, and actually decoding the level/quest script logic that selects
-  between named position markers all remain open — these would need
-  `.eco` payload extraction (still unresolved) to make further progress,
-  since that's where the actual scripted logic lives.
+- ~~The `.wd`/`.eco` payload-location problem~~ — **solved**, though not via
+  `word1..word4` (see "Major breakthrough: `.eco` payload location solved"
+  above): `.eco` files are independent zlib blocks with their own `"ECO"`
+  magic header and embedded name. `find_eco_files` locates and identifies
+  all 21 real compiled scripts in `DLC3_PC.wd`, including the main
+  `TwoWorlds2Quests` script. Confirmed the complete property-bag key
+  vocabulary (`PCQ`, `PSDN`, `PQUS`, `Lector`, `PUMN`, `PQTIMED`, `PQBS`) as
+  literal engine strings there too.
+- **Deliberately stopped here** (user decision, see "Stopping point"
+  above) before decoding the actual bytecode/opcode format — that's a
+  fundamentally bigger, separately-scoped undertaking (closer to writing a
+  disassembler for an unknown VM) than the find-and-correlate work in this
+  document. The numeric-ID-indexed quest table and the level/quest script
+  logic that selects between named position markers remain open, and would
+  be the natural next things to attack if/when that larger project is
+  picked up — starting point: `find_eco_files`, the confirmed property-key
+  vocabulary, and the ordered (non-deduplicated) string table's revealed
+  `QTD → QSD → QUEST_GIVEN → QFD → QCD → QUEST_SOLVED` lifecycle pattern.
 - ~~Determine whether `word1..word4` are offsets, checksums, or something
   else~~ / ~~find the file payload location from entry metadata~~ — pursued
   with a real 7,057-entry statistical sample from the full `DLC3_PC.wd`
@@ -837,13 +850,46 @@ the shared templating system used for *every* quest:
   consistent with the level-marker data found in the earlier `.wd`
   investigation.
 
-**One notable gap:** `PCQ` itself — the specific property confirmed to
-carry quest-relevant state for Casbrim — does **not** appear as a literal
-string anywhere checked so far (not in `TwoWorlds2Quests`'s 352 strings,
-not in any of the other 21 `.eco` files searched as a substring, not in the
-level-marker chunk). Unlike `PSDN`/`PQUS`/`Lector`/`PUMN`, which are all
-confirmed generic engine strings, `PCQ` remains unexplained — either
-constructed dynamically at runtime (not a compile-time string literal) or
-defined in one of the several `.eco` files whose strings haven't been
-individually inspected yet (only `TwoWorlds2Quests`, `DLC_3`, and the one
-level-marker chunk were checked for it specifically).
+**Correction — `PCQ` gap resolved, it was a tooling bug, not a real
+mystery.** The "notable gap" above was wrong: `PCQ` *is* a literal string
+in `TwoWorlds2Quests` — the ad-hoc string-extraction script used to survey
+all 21 files required a minimum length of 4 characters, silently filtering
+out the exact 3-character string `"PCQ"`. Re-searching with
+`search_text_multi` (no length minimum) found it immediately, twice, right
+in the middle of the same property-key cluster:
+`PSDN\0 PQUS\0 PQUS\0 PCQ\0 Lector\0 PCQ\0 PQTIMED\0 PQBS\0 PQBS\0` — i.e.
+`PCQ` is defined in the exact same place as its siblings, appearing twice
+(once each for what are very likely a getter and a setter reference in the
+compiled code, matching the doubled `PQUS`/`PQBS` too). This gives the
+**complete, confirmed property-bag key vocabulary**: `PCQ`, `PSDN`,
+`PQUS`, `Lector`, `PUMN`, `PQTIMED`, `PQBS` — all genuine engine constants,
+none invented by the byte-scanning approach.
+
+**Further structural insight: the string table isn't deduplicated, so its
+order reflects real execution sequence.** The same template strings
+(`translateQ_%d_QTD`, `_QSD_C1/C2`, `_QFD_C1/C2`, `_QCD_C1/C2`) appear
+multiple times in a row rather than being interned once — meaning each
+occurrence in this list corresponds to one place in the *source* code that
+referenced that string, in original order. Reading through the sequence
+around `PCQ`/`Lector` reveals a readable lifecycle without needing any
+opcode decoding: `...QTD (title) → QSD_C1/C2 (start description
+variants) → QUEST_GIVEN → QSD_C1/C2 (repeated) → QUEST_SOLVED →
+QSD → QFD_C1/C2 (failed variants) → QFD → QCD_C1/C2 (complete variants)
+→ QCD → (the QSD/QUEST_SOLVED block repeats) → ...`. This confirms a real,
+generic `QUEST_GIVEN`/`QUEST_SOLVED` state pair exists in the engine's
+quest-handling logic, consistent with (though not yet directly wired to)
+the property-bag state we've been tracking via `PCQ`.
+
+## Stopping point (2026-07-11)
+
+Decoding further (mapping specific opcodes to specific behavior, e.g.
+finding exactly what numeric comparison against `PCQ` triggers
+`QUEST_SOLVED`) would require decoding the actual bytecode instruction
+format — a fundamentally larger undertaking than everything done so far
+(closer to writing a disassembler for an unknown VM than to the
+find-and-correlate work in this document). Deliberately stopping here by
+user decision rather than continuing into that scope. The toolkit
+(`tw2tools`) and all findings in this document are the durable output of
+this investigation; resuming bytecode decoding later is a legitimate,
+separately-scoped future project, not a dead end — `find_eco_files` and
+the confirmed property-key vocabulary would be the starting point.
