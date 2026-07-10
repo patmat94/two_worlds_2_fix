@@ -5,3 +5,4 @@ wd_extract/
 __pycache__/
 *.pyc
 .pytest_cache/
+mcp.json
