@@ -931,12 +931,13 @@ ad-hoc `min_length=4` regex that had silently dropped `PCQ`.
   possible — there was nothing to cross-validate against.
 - Task 7 (`task7_pcq_correlation.json`) searched the confirmed `PCQ`
   transition values (`20`, `3483`, `853`) as u8/u16-LE/u32-LE across the
-  whole 179,340-byte file, finding 483 total hits. The single closest hit
-  to any anchor is `value=20`, `encoding=u16_le`, `offset=41`, nearest
-  anchor at `offset=395` (the `QUEST_GIVEN` occurrence) —
-  `distance_to_nearest_anchor=354` bytes, far outside the ~32-40 byte
-  window used throughout Tasks 5/6. This does not constitute a confident
-  match: 354 bytes is roughly 9x the window size used elsewhere in this
+  whole 179,340-byte file, finding 483 total hits. The closest hits to
+  any anchor are a tie between `value=20`, `encoding=u16_le`, `offset=41`
+  and `value=20`, `encoding=u8`, `offset=41` (both encodings start at the
+  same byte), nearest anchor at `offset=395` (the `QUEST_GIVEN`
+  occurrence) — `distance_to_nearest_anchor=354` bytes, far outside the
+  32-byte window used in Tasks 5/6. This does not constitute a confident
+  match: 354 bytes is roughly 11x the window size used elsewhere in this
   investigation, and no other hit came closer.
 
 **Why this didn't resolve the question:** string constants and any
@@ -948,9 +949,10 @@ opcodes, which this pass deliberately did not attempt.
 point, decoding further would require building an actual opcode
 interpreter rather than anchor-based correlation. Not pursued further in
 this pass by design (see the exploration spec). Future starting point:
-the `value=20`/`u16_le`/`offset=41` hit near the `QUEST_GIVEN` anchor at
-offset 395 is, despite the 354-byte distance, still the single closest
-PCQ-value occurrence to any lifecycle anchor found across the whole
-file — worth revisiting first if resuming, though confirming any link
+the `value=20`/`offset=41` hits (tied between the `u16_le` and `u8`
+encodings) near the `QUEST_GIVEN` anchor at offset 395 are, despite the
+354-byte distance, still the closest PCQ-value occurrences to any
+lifecycle anchor found across the whole file — worth revisiting first
+if resuming, though confirming any link
 would require actual opcode decoding rather than further anchor-distance
 triangulation.
