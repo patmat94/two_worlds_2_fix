@@ -893,3 +893,64 @@ user decision rather than continuing into that scope. The toolkit
 this investigation; resuming bytecode decoding later is a legitimate,
 separately-scoped future project, not a dead end — `find_eco_files` and
 the confirmed property-key vocabulary would be the starting point.
+
+## Resumed: exploratory bytecode pass (2026-07-13) — inconclusive
+
+Resumed the bytecode-decoding project as a single time-boxed exploratory
+pass (see
+`docs/superpowers/specs/2026-07-13-eco-bytecode-exploration-design.md`),
+using an anchor-and-triangulate method rather than building a general
+disassembler.
+
+**Corrected extraction method.** The previous `dlc3_eco_full.bin` scratch
+fragment (1468 bytes) was stale/incorrect. The correct method decompresses
+every zlib block in the archive first, then checks which decompressed
+blocks start with the `"ECO"` magic (each `.eco` file is its own complete
+zlib block). Added `tw2tools.wd_format.extract_eco_files_from_wd_archive`
+(tested) for this. Re-confirmed all 21 real `.eco` files, with
+`TwoWorlds2Quests.eco` at the documented 179,340 bytes. Also added
+`find_null_terminated_strings` (tested), replacing the earlier buggy
+ad-hoc `min_length=4` regex that had silently dropped `PCQ`.
+
+**What was tried:**
+- Task 4 (`task4_strings.json`) found 3,122 null-terminated strings in
+  `TwoWorlds2Quests.eco`, with offsets spanning bytes 0..176,043 — 98.2%
+  of the 179,340-byte file — determined to be INTERLEAVED with bytecode
+  throughout the file, not clustered in a separate contiguous string
+  pool. Task 5 (`task5_anchors.json`) found only 1 `QUEST_GIVEN`
+  occurrence (offset 395) and 2 `QUEST_SOLVED` occurrences (offsets 491
+  and 810) in the entire file. All three anchors' `candidate_quest_id_hits`
+  are empty — none of the three 32-byte windows around these offsets
+  contained the confirmed quest IDs `45` (`Q_45`) or `2` (`GROUP_2`) in
+  any encoding (u8/u16-LE/u32-LE).
+- Task 6 (`task6_cross_validation.json`) cross-validated all 21 extracted
+  `.eco` scripts for the same keywords: `QUEST_GIVEN`/`QUEST_SOLVED`
+  appear in only `TwoWorlds2Quests.eco`, at the identical 3 offsets found
+  in Task 5. None of the other 20 scripts contain either keyword at all,
+  so no cross-script confirmation of any byte-window pattern was
+  possible — there was nothing to cross-validate against.
+- Task 7 (`task7_pcq_correlation.json`) searched the confirmed `PCQ`
+  transition values (`20`, `3483`, `853`) as u8/u16-LE/u32-LE across the
+  whole 179,340-byte file, finding 483 total hits. The single closest hit
+  to any anchor is `value=20`, `encoding=u16_le`, `offset=41`, nearest
+  anchor at `offset=395` (the `QUEST_GIVEN` occurrence) —
+  `distance_to_nearest_anchor=354` bytes, far outside the ~32-40 byte
+  window used throughout Tasks 5/6. This does not constitute a confident
+  match: 354 bytes is roughly 9x the window size used elsewhere in this
+  investigation, and no other hit came closer.
+
+**Why this didn't resolve the question:** string constants and any
+integer references to them could not be distinguished from other
+incidental integers in the file without decoding actual instruction
+opcodes, which this pass deliberately did not attempt.
+
+**Stopping point (2026-07-13).** Consistent with the original stopping
+point, decoding further would require building an actual opcode
+interpreter rather than anchor-based correlation. Not pursued further in
+this pass by design (see the exploration spec). Future starting point:
+the `value=20`/`u16_le`/`offset=41` hit near the `QUEST_GIVEN` anchor at
+offset 395 is, despite the 354-byte distance, still the single closest
+PCQ-value occurrence to any lifecycle anchor found across the whole
+file — worth revisiting first if resuming, though confirming any link
+would require actual opcode decoding rather than further anchor-distance
+triangulation.
