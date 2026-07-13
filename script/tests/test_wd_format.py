@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block, find_eco_files
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block, find_eco_files, extract_eco_files_from_wd_archive
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -269,3 +269,22 @@ def test_find_eco_files_identifies_by_embedded_name():
 
 def test_find_eco_files_returns_empty_list_when_no_magic_present():
     assert find_eco_files(b"nothing interesting here") == []
+
+
+def test_extract_eco_files_from_wd_archive_finds_compressed_eco_blocks():
+    eco_a = _build_eco_file("ScriptA", b"bytecodeA")
+    eco_b = _build_eco_file("ScriptB", b"bytecodeB" * 5)
+    decoy = b"just some archive metadata, not an eco file"
+    wd_data = zlib.compress(eco_a) + zlib.compress(decoy) + zlib.compress(eco_b)
+
+    results = extract_eco_files_from_wd_archive(wd_data)
+
+    assert {r.name for r in results} == {"ScriptA", "ScriptB"}
+    by_name = {r.name: r for r in results}
+    assert by_name["ScriptA"].data == eco_a
+    assert by_name["ScriptB"].data == eco_b
+
+
+def test_extract_eco_files_from_wd_archive_returns_empty_list_when_none_present():
+    wd_data = zlib.compress(b"nothing eco-shaped here")
+    assert extract_eco_files_from_wd_archive(wd_data) == []

@@ -348,3 +348,13 @@ def find_eco_files(data: bytes) -> list[EcoFile]:
             files.append(EcoFile(offset=idx, name=name, data=data[idx:]))
         start = idx + 1
     return files
+
+
+def extract_eco_files_from_wd_archive(wd_data: bytes) -> list[EcoFile]:
+    results: list[EcoFile] = []
+    for _offset, block in decompress_all_blocks(wd_data):
+        if block.startswith(ECO_MAGIC):
+            found = find_eco_files(block)
+            if found:
+                results.append(found[0])
+    return results
