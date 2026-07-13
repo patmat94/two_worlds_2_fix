@@ -130,6 +130,18 @@ No commit for this step (scratch output, gitignored).
 TwoWorlds2Quests.eco, to identify candidate literals for byte-alignment
 analysis in Tasks 3 and 4.
 
+Uses min_length=4: a min_length=1 scan surfaces single printable bytes
+followed by a zero byte (e.g. 'j', '=', '^') as the "most repeated"
+strings - these are near-certainly incidental byte patterns in the
+bytecode/operand stream, not real semantic string constants (no
+compiled scripting engine emits single-character identifiers this
+often). Every known real semantic literal in this file (PCQ, Lector,
+QUEST_GIVEN, the translateX_%d_* templates, etc.) is 3+ characters, and
+the only 3-character one (PCQ) repeats just twice - far below what's
+needed to be a useful alignment anchor regardless - so min_length=4
+excludes the noise without excluding anything relevant to this
+specific ranking task.
+
 Run: python script/wd_extract/task2_rank_repeated_strings.py
 (depends on Task 1 having produced eco_scripts/TwoWorlds2Quests.eco.bin)
 """
@@ -152,8 +164,8 @@ OUTPUT_PATH = Path(__file__).resolve().parent / "task2_string_ranking.json"
 def main() -> None:
     assert ECO_PATH.exists(), f"run Task 1 first to produce {ECO_PATH}"
     data = ECO_PATH.read_bytes()
-    records = find_null_terminated_strings(data, min_length=1, max_length=256)
-    print(f"Total strings found: {len(records)}")
+    records = find_null_terminated_strings(data, min_length=4, max_length=256)
+    print(f"Total strings found (min_length=4): {len(records)}")
 
     counts = Counter(r.name for r in records)
     ranked = counts.most_common(20)
@@ -186,7 +198,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run it**
 
 Run: `python script/wd_extract/task2_rank_repeated_strings.py`
-Expected output: total string count (should be 3,122 per the prior investigation's Task 4 finding — if it differs, note the discrepancy but continue, since the extraction method is unchanged and this may just reflect noticing a detail missed before), the top-20 list with counts, and "Ground-truth sanity check passed."
+Expected output: a total string count noticeably lower than the prior investigation's 3,122 figure (that figure was from a `min_length=1` scan and includes single-character noise; this task deliberately uses `min_length=4` to exclude it — a lower count here is correct, not a regression), the top-20 list with counts (this time made of real multi-character identifiers, not single characters like `'j'`/`'='`/`'^'`), and "Ground-truth sanity check passed."
 
 No commit (scratch output, gitignored).
 
