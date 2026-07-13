@@ -200,7 +200,7 @@ Add to `script/tests/test_wd_format.py`:
 
 ```python
 def test_find_null_terminated_strings_finds_basic_strings():
-    blob = b"noise" + b"PCQ\x00" + b"Lector\x00" + b"tail\x01\x02"
+    blob = b"noise\x01" + b"PCQ\x00" + b"Lector\x00" + b"tail\x01\x02"
     records = find_null_terminated_strings(blob)
     names = [r.name for r in records]
     assert "PCQ" in names
