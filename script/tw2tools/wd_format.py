@@ -358,3 +358,25 @@ def extract_eco_files_from_wd_archive(wd_data: bytes) -> list[EcoFile]:
             if found:
                 results.append(found[0])
     return results
+
+
+def find_null_terminated_strings(
+    data: bytes, min_length: int = 1, max_length: int = 256
+) -> list[NamedRecord]:
+    records: list[NamedRecord] = []
+    pos = 0
+    n = len(data)
+    while pos < n:
+        if 32 <= data[pos] < 127:
+            start = pos
+            while pos < n and 32 <= data[pos] < 127:
+                pos += 1
+            if pos < n and data[pos] == 0:
+                length = pos - start
+                if min_length <= length <= max_length:
+                    records.append(
+                        NamedRecord(offset=start, name=data[start:pos].decode("ascii"))
+                    )
+        else:
+            pos += 1
+    return records

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block, find_eco_files, extract_eco_files_from_wd_archive
+from tw2tools.wd_format import decompress_all_blocks, find_zlib_offsets, parse_archive_entries, search_text_multi, diff_byte_regions, parse_save_summary, find_named_records, parse_property_bags, patch_zlib_block, find_eco_files, extract_eco_files_from_wd_archive, find_null_terminated_strings, NamedRecord
 
 
 def test_find_zlib_offsets_finds_known_signature():
@@ -288,3 +288,37 @@ def test_extract_eco_files_from_wd_archive_finds_compressed_eco_blocks():
 def test_extract_eco_files_from_wd_archive_returns_empty_list_when_none_present():
     wd_data = zlib.compress(b"nothing eco-shaped here")
     assert extract_eco_files_from_wd_archive(wd_data) == []
+
+
+def test_find_null_terminated_strings_finds_basic_strings():
+    blob = b"noise\x01" + b"PCQ\x00" + b"Lector\x00" + b"tail\x01\x02"
+    records = find_null_terminated_strings(blob)
+    names = [r.name for r in records]
+    assert "PCQ" in names
+    assert "Lector" in names
+
+
+def test_find_null_terminated_strings_respects_min_length():
+    # Regression test for the exact bug documented in wd_extraction_notes.md:
+    # a min_length of 4 must exclude the 3-character "PCQ" while keeping
+    # longer strings.
+    blob = b"PCQ\x00Lector\x00"
+    records = find_null_terminated_strings(blob, min_length=4)
+    names = [r.name for r in records]
+    assert "PCQ" not in names
+    assert "Lector" in names
+
+
+def test_find_null_terminated_strings_ignores_non_null_terminated_runs():
+    blob = b"NoTerm\x01"
+    assert find_null_terminated_strings(blob) == []
+
+
+def test_find_null_terminated_strings_returns_offsets():
+    blob = b"\x00\x00" + b"Hello\x00"
+    records = find_null_terminated_strings(blob)
+    assert records == [NamedRecord(offset=2, name="Hello")]
+
+
+def test_find_null_terminated_strings_empty_data_returns_empty_list():
+    assert find_null_terminated_strings(b"") == []
