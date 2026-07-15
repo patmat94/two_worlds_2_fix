@@ -1023,3 +1023,95 @@ bytes) - worth a direct content inspection (rather than another
 offset-value search) in any future pass, since Task 5's offset-reference
 search there came up empty but didn't examine what the 172 bytes
 actually contain.
+
+## Gap-content inspection (2026-07-15) — a real record shape found, semantics unresolved
+
+Followed up on Stage 1's "future starting point": directly inspected the
+byte content of the largest gaps instead of searching them for offset
+values. Re-extracted `TwoWorlds2Quests.eco` fresh (same
+`extract_eco_files_from_wd_archive`, 179,340 bytes, unchanged) and hex-
+dumped the top 5 non-zero string-gaps.
+
+**Two of the five "gaps" turned out to be an artifact of the Stage 1
+`min_length=4` filter, not bytecode.** The 24-byte gap (between
+`AGGRESSIVE` and `SMALL`) is six 3-character strings
+(`GLD`/`REP`/`EXP`/`SKL`/`ITM`/`RND`) excluded by the length-4 cutoff; the
+8-byte gap (between `RUN_VERY_FAST` and `BACK_TO_GIVER`) is three
+short template strings (`%d`, `0`, `%d`). Both are ordinary string data,
+not a bytecode region - worth remembering if this line of investigation
+resumes, since any future gap analysis should first rule out
+short-string exclusion before treating a gap as "real" bytecode.
+
+**The other three gaps contain a genuine, repeated, fixed-shape
+record - found in three independent file locations.** The 172-byte gap
+(between `RESURRECT_EFFECT` and `QuestsOn`) is five consecutive
+repeats of the same structure; the 35-byte gap (between
+`translateAddedSkillPoints` and `DQ_%d`, near the start of the file at
+offset 182) and the 34-byte gap (between `Summons` and `test1`, offset
+5135) are one repeat each - 7 occurrences total, confirmed by an
+exhaustive whole-file search (100 raw `0xFFFFFFFF` 4-byte sequences
+exist in the file; exactly 7 of them are followed by this full record
+shape, and all 7 are these three locations - no occurrences anywhere
+else in the file's 179,340 bytes).
+
+**The record shape (34-35 bytes):**
+- 4 bytes: `0xFFFFFFFF` sentinel
+- 10-11 zero bytes
+- 1 byte: `0x80` flag (always exactly this value, all 7 occurrences)
+- 6-7 zero bytes
+- 3 consecutive u32-LE integers `V`, `V+4`, `V+5` (the "+4, then +1"
+  step is identical in all 7 occurrences)
+
+**The mechanically verified relationship:** in every one of the 7
+occurrences, `V` exactly equals *this record's own sentinel's absolute
+file offset, minus 44* - zero exceptions (sentinel/value pairs:
+183/139, 4121/4077, 4155/4111, 4190/4146, 4225/4181, 4259/4215,
+5135/5091 - each pair's difference is exactly 44). This was checked
+computationally, not eyeballed.
+
+**What `V` does NOT mean:** checked and ruled out - `V` does not match
+any of the file's 352 known string offsets (exhaustive byte-by-byte
+u16-LE/u32-LE scan, zero matches, broader than Task 5's original
+22-offset check). Inspecting the actual file content sitting at each
+`V` position shows no consistent target: one lands on a string's last
+character before its own null terminator, one lands mid-word inside an
+unrelated string, and three land inside a *preceding occurrence's own
+triplet field* (an artifact of records sitting close together in the
+172-byte gap, not evidence of an intentional cross-reference). This
+inconsistency, combined with the perfectly constant "-44" arithmetic
+holding regardless of what's actually at the target location, is why
+`V` reads as a **position-derived value computed from the record's own
+file offset** (most likely a fixed-size back-pointer/header-relative
+field emitted mechanically by the compiler) rather than an
+author-chosen reference to specific string or quest data.
+
+**Interpretation:** this is a confident, cross-validated instruction/
+record *shape* - the first one found in this entire investigation with
+byte-exact, repeatable framing (sentinel + fixed-position flag +
+arithmetic-consistent integer triplet) - but it does not, by itself,
+explain how bytecode references a string constant, since `V` is
+demonstrably self-referential rather than content-referential. It is
+also rare: only 7 instances in the whole file, all clustered in 3
+places, so it may be a narrow special-case structure (e.g. tied
+specifically to whatever `RESURRECT_EFFECT`, `translateAddedSkillPoints`,
+and `Summons` have in common) rather than the general "reference a
+string" instruction Stage 1 originally went looking for.
+
+**Stopping point (2026-07-15).** This is a positive structural finding
+(a real, mechanically-verified byte-level shape, unlike Stage 1's
+inconclusive result) but an open semantic question (why `-44`, and why
+only these 3 locations). Continuing would mean: checking whether this
+exact shape (sentinel + `0x80` + arithmetic triplet) appears in any of
+the other 20 real `.eco` scripts (not just `TwoWorlds2Quests`), and
+examining what precedes/follows each of the 3 occurrence sites
+semantically (are `RESURRECT_EFFECT`, `translateAddedSkillPoints`, and
+`Summons` related in the game's logic?) - both are new, unstarted
+threads, not a continuation of this pass.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/extract_quests_eco.py`,
+`script/wd_extract/inspect_gap_content.py`,
+`script/wd_extract/decode_gap1_structure.py`,
+`script/wd_extract/scan_gap1_all_offsets.py`,
+`script/wd_extract/decode_gap1_all_alignments.py`,
+`script/wd_extract/search_whole_file_for_record.py`.
