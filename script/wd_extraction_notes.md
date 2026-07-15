@@ -956,3 +956,70 @@ lifecycle anchor found across the whole file — worth revisiting first
 if resuming, though confirming any link
 would require actual opcode decoding rather than further anchor-distance
 triangulation.
+
+## Bytecode decoder, Stage 1 (2026-07-13) — inconclusive, but with a real structural finding
+
+Began the general-purpose `.eco` disassembler project (see
+`docs/superpowers/specs/2026-07-13-eco-bytecode-decoder-design.md`),
+staged with checkpoints. Stage 1 (format discovery) originally planned
+to align bytes immediately around repeated string occurrences, but
+pivoted mid-stage after an unexpected finding made that approach
+unsound - the pivot itself is a real, useful result even though the
+follow-on search came up empty.
+
+**Method and pivot:** ranked the most-repeated literals in
+`TwoWorlds2Quests.eco` (top: `MARKER_CHEST` at `12` occurrences,
+second: `MARKER_GATE` at `10` occurrences, out of 352 total strings
+found with `min_length=4`). Aligning bytes around every occurrence of
+the top literal found one invariant byte (`0x00` immediately before
+the string, all 12/12 occurrences) - but inspecting the byte *before
+that* showed a printable ASCII character in all 12 cases, the tail of
+a different, unrelated preceding string each time (examples:
+`translateGROUP_%d`, `translateQ_%d`, `translateName_%d`, `LLvl`,
+`QLINV`, `PrintContainers`). **This means the strings are packed
+back-to-back with zero gap and no adjacent opcode/framing byte at
+all** - the "invariant byte" was just the preceding string's own NUL
+terminator, not an instruction. The length-byte hypothesis (byte
+before = string length) was also rejected: 0/12 occurrences matched
+(the actual byte is always `0x00`, not `12`/`0x0C`).
+
+Pivoted to mapping the file's actual string-vs-bytecode structure
+instead: of `351` consecutive string pairs across the whole file,
+`323` (`92.0%`) are back-to-back with no gap, confirming the
+tight-packing finding holds file-wide, not just for one literal. The
+`28` gaps with actual content between strings are the candidate
+bytecode regions; the largest 10 ranged from `4` bytes up to a
+standout `172` bytes.
+
+**What was tried:** searched the 5 largest gaps (sizes `172`, `35`,
+`34`, `24`, `8` bytes) for u32-LE integers matching `MARKER_CHEST`'s
+or `MARKER_GATE`'s exact file offsets (22 known offsets total: 12 for
+`MARKER_CHEST`, 10 for `MARKER_GATE`) - `0` hits found across all 5
+gaps.
+
+**Why this didn't resolve the question:** a raw absolute-offset u32-LE
+scan of only the 5 largest gaps, for only 2 literals' offsets, is a
+narrow test. It does not rule out: relative (rather than absolute)
+offset encoding, a separate index/lookup table elsewhere in the file,
+smaller gaps also containing real references, or a different integer
+width/endianness.
+
+**Stopping point for Stage 1 (2026-07-13).** The real, confirmed
+finding from this stage is structural: `TwoWorlds2Quests.eco`'s string
+constants are packed in a tight, framing-free run with no opcode
+adjacent to them - any bytecode referencing a string must do so from
+elsewhere in the file, not inline. The follow-on search for an absolute
+offset reference in the largest gaps did not confirm a specific
+mechanism. Continuing would need either widening the offset/index
+search (more gaps, relative offsets, other integer widths) or a
+different technique entirely (e.g. examining the *content* of a large
+gap directly for recognizable structure, rather than searching it for
+known offset values) - a new planning decision, not an automatic
+continuation. Future starting point: the `172`-byte gap between
+`RESURRECT_EFFECT` (ending at file offset 4121) and `QuestsOn`
+(starting at file offset 4293) is by far the largest and most distinct
+candidate bytecode region found (the next-largest gap drops to 35
+bytes) - worth a direct content inspection (rather than another
+offset-value search) in any future pass, since Task 5's offset-reference
+search there came up empty but didn't examine what the 172 bytes
+actually contain.
