@@ -1045,7 +1045,9 @@ short-string exclusion before treating a gap as "real" bytecode.
 **The other three gaps contain a genuine, repeated, fixed-shape
 record - found in three independent file locations.** The 172-byte gap
 (between `RESURRECT_EFFECT` and `QuestsOn`) is five consecutive
-repeats of the same structure; the 35-byte gap (between
+repeats of the same 34-byte structure (plus a little stray padding
+between some repeats, which is why the gap totals 172 rather than an
+exact multiple of 34); the 35-byte gap (between
 `translateAddedSkillPoints` and `DQ_%d`, near the start of the file at
 offset 182) and the 34-byte gap (between `Summons` and `test1`, offset
 5135) are one repeat each - 7 occurrences total, confirmed by an
@@ -1054,13 +1056,22 @@ exist in the file; exactly 7 of them are followed by this full record
 shape, and all 7 are these three locations - no occurrences anywhere
 else in the file's 179,340 bytes).
 
-**The record shape (34-35 bytes):**
+**The record shape is a constant 34 bytes, not a range** (corrected
+after independent verification measured the exact zero-run lengths per
+occurrence rather than eyeballing them - the earlier draft of this note
+said "10-11" / "6-7" / "34-35 bytes", which was wrong: all 7 occurrences
+have identically-sized fields, with zero variation):
 - 4 bytes: `0xFFFFFFFF` sentinel
-- 10-11 zero bytes
+- 10 zero bytes (exactly, all 7 occurrences)
 - 1 byte: `0x80` flag (always exactly this value, all 7 occurrences)
-- 6-7 zero bytes
+- 7 zero bytes (exactly, all 7 occurrences)
 - 3 consecutive u32-LE integers `V`, `V+4`, `V+5` (the "+4, then +1"
   step is identical in all 7 occurrences)
+
+Total: 4+10+1+7+12 = 34 bytes, every time. The apparent "34 or 35 byte"
+gap sizes reported earlier come from a stray extra `0x00` padding byte
+sitting *between* some records (inter-record padding), not from any
+variation in the record's own internal layout.
 
 **The mechanically verified relationship:** in every one of the 7
 occurrences, `V` exactly equals *this record's own sentinel's absolute
