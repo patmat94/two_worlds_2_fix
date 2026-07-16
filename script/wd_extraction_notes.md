@@ -1199,3 +1199,57 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/search_all_scripts_for_record.py`,
 `script/wd_extract/inspect_eco_header.py`,
 `script/wd_extract/decode_all_headers.py`.
+
+## Header fields B, C, D — inconclusive (2026-07-16)
+
+Followed up on the "still open" question from the header-decode section:
+what do the three per-file variable header integers (field B at offset 8,
+field C and field D at offset 16+name_length+4 and +8) actually mean?
+Gathered, per file, several independently-computable candidate
+quantities - `file_size`, `body_len` (file size minus header length),
+total raw `0xFFFFFFFF` sentinel count, 34-byte record-shape match count,
+null-terminated string count at both `min_length=1` and `min_length=4`,
+and unique string count at `min_length=4` - and tested whether field B,
+C, or D exactly equals any candidate (or that candidate ±1) across all
+21 files simultaneously (the same method that found `header_length =
+len(name)+28`).
+
+**Result: no exact match found for any of the three fields against any
+of the 7 tested candidates, with or without a ±1 offset.** This is a
+real negative result, not a gap in effort - the same systematic
+equality-testing approach that successfully cracked the header length
+formula came up empty here. None of field B/C/D is simply "a count of
+X" for any of the quantities that were readily computable from what
+this investigation already knows how to measure.
+
+**One observation worth recording despite the negative correlation
+test:** field B's value distribution across the 21 files is `{3: 15
+files, 2: 4 files, 4: 1 file, 30: 1 file}` - i.e. it looks categorical
+(a small, mostly-repeated set of values) rather than a raw count, for
+20 of the 21 files. The 4 files with field B = 2 are `ConfigCampaign`,
+`JSTestCampaign` (both copies), and `Test maps` - all test/tooling
+scripts by name, not player-facing content, which is suggestive but
+unconfirmed (not verified against any independent classification of
+these scripts). `RPGCompute` is the one outlier at 30, standing apart
+from the mostly-2/3/4 pattern the other 20 files share - consistent
+with `RPGCompute` also being an outlier on nearly every other measured
+quantity in this investigation (most strings, most sentinels, most
+record matches, by a wide margin), suggesting it may be a fundamentally
+different kind of file (a shared utility/library script) rather than a
+per-quest content script like most of the other 20.
+
+**Stopping point (2026-07-16).** Continuing would need either testing
+against candidates this investigation doesn't yet have tooling to
+compute (e.g. counts of specific bytecode patterns not yet identified,
+or a count of *type-3* files vs *type-2* files if field B really is
+categorical), or accepting that these fields may not be resolvable from
+static analysis of the `.eco` files alone - a new planning decision, not
+a continuation of this pass. The other pre-existing open thread (whether
+`RESURRECT_EFFECT`, `translateAddedSkillPoints`, and `Summons` - the
+34-byte record's three occurrence sites in `TwoWorlds2Quests.eco` - are
+related in the game's own logic) remains entirely unstarted and would
+likely need a different kind of research (game content/wiki lookup)
+rather than more binary analysis.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/correlate_header_fields.py`.
