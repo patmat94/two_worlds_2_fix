@@ -1429,3 +1429,54 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/decode_rpg_index_table.py`,
 `script/wd_extract/decode_table_full_range.py`,
 `script/wd_extract/check_all_files_for_tables.py`.
+
+## Searching for the table's consumer — inconclusive, but the table's boundaries confirmed clean (2026-07-16)
+
+Followed up on the open question from the previous section: what
+bytecode instruction actually *reads* the confirmed `RPGCompute.eco`
+index table (35051-36107)? Tried the most direct approach - searching
+the whole file for a u16/u32 integer (either endianness) exactly
+matching the table's own start offset (35051), end offset (36107), or
+entry count (132 or 133), on the theory that a "load this table" or
+"loop N times" instruction would need to encode one of those numbers
+somewhere.
+
+**Result: no reference to the table's absolute position found
+anywhere.** Zero hits for 35051 or 36107 - if something loads this
+table by address, it isn't via a simple absolute-offset integer stored
+elsewhere in the file. Hits for the entry counts 132/133 were
+plentiful (131 matches) but immediately recognizable as the same class
+of noise already diagnosed twice before in this investigation: both
+values are under 256, and this format's constant null-byte padding
+makes any specific small value recur throughout a 293KB file by pure
+chance. Checked the two boundary regions directly (immediately before
+byte 35051 and immediately after byte 36107) for a header/footer count
+field instead of a scattered match - found none: no clean "132" or
+"133" sits adjacent to either boundary.
+
+**One useful byproduct: the table's boundaries are confirmed clean, not
+an artifact of the search window.** The bytes immediately preceding
+35051 (offsets ~35003-35047) follow a *different, irregular* value
+progression (deltas of 20, 20, 20, 19, 1, 13, 13, 12, 13, 12, 1 -
+nothing like the clean, confirmed table's 34-then-1 pattern) - i.e. the
+ordered table genuinely *starts* at the first confirmed record (25969),
+it doesn't extend further back with unclassified entries. The bytes
+immediately following 36107 are also clearly a different structure
+(values 1136, 1087, 1202, 1317, 1415, ... - much smaller, non-monotonic,
+no relationship to any confirmed record offset). Both neighboring
+regions remain unidentified, but are confirmed to be something other
+than a continuation of this same table.
+
+**Stopping point (2026-07-16).** Identifying what reads this table
+would require either finding a *relative* (rather than absolute)
+address reference - untested so far, same gap noted since Stage 1 - or
+actually identifying at least one real opcode/instruction meaning by
+some other route, which is a fundamentally different and larger task
+than more offset-searching (this was flagged as a risk from the
+project's very first design doc). The table's existence and internal
+shape remain a solid, independently-verified positive finding from the
+prior section; only "what consumes it" is unresolved by this pass.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/extract_rpg.py`,
+`script/wd_extract/search_table_references.py`.
