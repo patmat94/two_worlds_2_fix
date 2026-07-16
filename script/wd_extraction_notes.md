@@ -1697,3 +1697,41 @@ further progress, not another variation on offset-searching.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/search_relative_offsets.py`.
+
+## Generalizing the flag byte finds no sibling table family (2026-07-16)
+
+Tried a genuinely different angle rather than more offset-searching:
+relaxed the confirmed record shape to allow *any* single flag byte
+(not just the confirmed `0x80`) - sentinel + 10 zero bytes + [any byte]
++ 7 zero bytes + ascending u32-LE triplet `V,V+4,V+5` - across all 21
+real `.eco` scripts, on the theory that a sibling "table family" using
+the identical framing but a different flag/type byte might index
+something else entirely (most hoped-for: string offsets, which would
+finally answer the original "how does bytecode reference a string"
+question this whole investigation started with in Stage 1).
+
+**Result: the flag byte is `0x80` in all 196 occurrences, across every
+one of the 21 files, with zero exceptions.** No sibling family exists
+under this exact framing - the structure really is singular, and its
+`V` values only ever reference other 34-byte records (never strings,
+already established). This rules out "relax the flag byte" as a route
+to a string-referencing structure.
+
+**Where this leaves the bytecode side-thread.** Absolute-offset
+reference search, relative-offset reference search, and now flag-byte
+generalization have all been tried against this table and its record
+shape and found nothing further. Every technique available without
+actually decoding real VM opcode semantics has now been exhausted on
+this specific structure. Continuing productively from here requires
+committing to the larger, originally-flagged-as-out-of-scope effort:
+identifying real opcodes (e.g. by examining the bytes immediately
+surrounding a call site for the *other* record type already
+partially explored - the Stage-1 string literals - with fresh eyes now
+that the tightly-packed-with-no-framing structure is well understood,
+or by attempting to manually trace one of the smallest scripts,
+`DLC_2.eco`/`DLC_3.eco` (1468 bytes, exactly one confirmed record each)
+byte-by-byte in full, since their small size makes total manual
+coverage newly tractable) - not another pattern-search variation.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/generalize_flag_byte.py`.
