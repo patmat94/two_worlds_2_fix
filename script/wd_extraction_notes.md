@@ -1665,3 +1665,35 @@ already reached and stopped at.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/full_bags_at_save.py`.
+
+## Back to `.eco` bytecode: relative-offset reference to the table also comes up empty (2026-07-16)
+
+Resumed the `.eco` bytecode side-thread. The prior pass's "what reads
+the table" search only checked absolute file offsets; tried the
+explicitly-flagged-as-untested alternative: a **relative** displacement
+(the operand's own position, or the position right after it, plus a
+signed offset landing on the table's start or end) - the standard
+relative-jump encoding used by many real ISAs.
+
+**Result: also empty, and even the raw hit count came in under the
+noise floor.** Tested every byte position in `RPGCompute.eco` for a
+signed 16-bit or 32-bit displacement (both endiannesses, both "from
+this position" and "from right after this operand" base conventions)
+that would exactly reach the table's start (35051) or end (36107) -
+only checking positions where the needed displacement actually fits in
+the given width's signed range, not just improbable ones. Found 8 hits
+outside the table's own bytes, all small 16-bit matches - fewer than
+the roughly 18 coincidental hits pure chance would predict for that
+many (width, target, base-convention) combinations, and zero 32-bit
+hits at all. **This isn't just "no signal" - it's *below*-chance,
+about as clean a negative as this kind of search can produce.**
+
+**Both offset conventions (absolute, now relative) have been tried
+against this table and found nothing.** Whatever mechanism the VM uses
+to locate this table, it isn't expressible as a simple stored file
+offset (absolute or relative) elsewhere in the bytecode - confirming
+this really does require identifying actual opcode semantics to make
+further progress, not another variation on offset-searching.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/search_relative_offsets.py`.
