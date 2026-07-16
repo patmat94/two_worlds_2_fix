@@ -1933,3 +1933,75 @@ side-thread, not a failure of effort.
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/extract_quests.py`,
 `script/wd_extract/search_pcq_constants.py`.
+
+## User reports Casbrim's quest is genuinely bugged (not under-observed) - practical workaround attempt (2026-07-16)
+
+The user clarified that Casbrim's "Gods and Demons" quest never
+progressing past `PCQ=853` isn't a gap in the available save data -
+it's a real, known-to-the-user in-game bug that prevents the quest
+from advancing at all. This reframes the goal from "find how
+completion is encoded" (research) to "find a practical save-edit
+workaround" (a fix).
+
+**Checked two new leads for a hidden quest-journal flag - both ruled
+out.** (1) `PQBS` (78 occurrences in a save) is **unrelated** to
+dialogue-quest tracking - every entity carrying it is a combat
+mob/spawn or weapon-drop item (e.g. `BATMANS_ARCHER_01_E`,
+`Fenrir_Sword_1`, `DLC3_DESERT_DEMON_12`), none of which have a `PCQ`
+at all; it's almost certainly a "has this unique
+enemy/drop already spawned" flag, not a quest-completion marker.
+(2) `QUEST_GHOST_DLC` and `DLC3_QUESTWAND_1/2/3` (thematically
+suggestive names found via a broader named-record scan) did not yield
+a property bag in this pass. Combined with the original 2026-07-11
+investigation's exhaustive check (the confirmed quest ID `45`/`GROUP_2`
+against all ~969 property bags in a save - zero matches anywhere),
+**there is no separate save-file structure tracking "is this quest
+complete" - `PCQ` is the only lever this investigation has found.**
+
+**Checked Queen Arbellen (mechanically tied to the same Casbrim-accept
+trigger, but a different quest) for comparison.** Her `PCQ` converges
+to `992` in both independent chronological forks (`[181-220]` and
+`[221-280]`) - the same validated completion signature found for the
+six confirmed-completed NPCs earlier this session. This confirms the
+bug is specific to *Casbrim's own* script logic, not a save-wide data
+problem: the same "talk to Casbrim" trigger correctly advances
+Arbellen's parallel quest while Casbrim's own stays stuck.
+
+**No data-only method can determine the correct "next" PCQ value** -
+`853` never changed into anything else across the entire available
+save history, and this session's `.eco` bytecode work could not
+recover the actual comparison logic that would reveal it. Also
+genuinely possible: PCQ may not even be the true blocker (the bug
+could be in an unrelated precondition that never fires).
+
+**Delivered an experimental diagnostic instead of a derived fix** -
+the same category of action as the earlier (successful) Casbrim-
+position patch experiment. Generated three candidate saves, each a
+copy of `saves/remote/000280.TwoWorldsIISave` with *only* Casbrim's
+`PCQ` value changed (same-length ASCII substitution: `853`→`854`/
+`900`/`999`, chosen as a low-risk, easy-to-verify range of guesses,
+not derived from any specific evidence about the correct value) via
+`patch_zlib_block`:
+- `files/quest_saves/000280_casbrim_pcq_854.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_pcq_900.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_pcq_999.TwoWorldsIISave`
+
+Verified: the original save's SHA-256 hash is unchanged after all
+patch operations; each candidate file decompresses cleanly and shows
+*only* the `PCQ` field changed (every other property in Casbrim's own
+bag - `PSDN`, `PQUS`, `Lector`, `PUMN` - byte-identical to the
+original).
+
+**This is a genuine experiment, not a confirmed fix** - report back
+what happens with each candidate (does dialogue open at all? does
+anything visibly change?) so the next attempt can be informed by what
+was actually observed in-game, the same iterative approach already
+used successfully for the position-patch diagnostic.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/search_quest_lifecycle_in_save.py`,
+`script/wd_extract/investigate_pqbs_and_ghost.py`,
+`script/wd_extract/track_arbellen_pcq.py`,
+`script/wd_extract/locate_casbrim_pcq_bytes.py`,
+`script/wd_extract/patch_casbrim_pcq_candidates.py`,
+`script/wd_extract/verify_patched_saves.py`.
