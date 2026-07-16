@@ -1343,10 +1343,29 @@ estimate rather than trusting a small sample.
 `TwoWorlds2Quests.eco`'s initially-interesting signal turned out to be
 noise on closer inspection.**
 
-- `RPGCompute.eco`: real u32 hit count 188, vs. a control distribution
-  (30 random shifts) with mean 8.7 and max 64 - the real count exceeds
-  *every single one* of the 30 control shifts (z-score 13.4). This is
-  not explainable by chance.
+**Correction after independent re-verification (2026-07-16):** the
+initial raw-hit-count statistic below ("188 vs. a 30-shift control")
+turned out **not to be a robust test** - a more thorough resampling (200
+trials) found roughly 1-in-18 random shifts meet or exceed the real
+count of 188, because some shifted target sets happen to land on an
+unrelated region of the file (~offset 292500+) containing repetitive
+machine-code-like byte patterns that spuriously match small values very
+often. The raw hit count conflates genuine table structure (138 of the
+188 real hits sit inside the table's own byte span) with ordinary
+background noise elsewhere in the file (the other 50), and the control
+shifts can occasionally rack up large noise counts of their own. A far
+more decisive, robust statistic replaces it: **the longest contiguous
+run of ascending, exactly-34-apart `(value, value+1)` pairs is 132 for
+the real data, versus a maximum run length of only 1 across 30
+independent random-shift control trials.** A dense, perfectly-spaced,
+132-entry ascending run never arises by chance in any control trial -
+this is what actually establishes the finding, not the raw count.
+
+- `RPGCompute.eco`: real u32 hit count 188 (138 inside the table's own
+  span, 50 scattered background noise elsewhere - comparable in
+  magnitude to ordinary control noise). The longest ascending
+  `(value, value+1)`-run statistic is the reliable one: 132, vs. a
+  control maximum of 1.
 - `TwoWorlds2Quests.eco`: real count 25 sits at the 97th percentile of
   its own 30-shift control distribution, but one control shift scored
   70 - higher than the real count - making the control distribution
@@ -1359,8 +1378,11 @@ noise on closer inspection.**
 
 **Decoded the `RPGCompute.eco` signal directly - it is a literal
 record-index table, not just a statistical anomaly.** At file offset
-35051-36103 (1052 bytes, all standard 4-byte-aligned u32-LE reads, no
-alignment trick needed) sits a contiguous run of 132 entries, each 8
+**35051-36107 (1056 bytes = 132 x 8, all standard 4-byte-aligned u32-LE
+reads, no alignment trick needed** - corrected after independent
+re-verification found the original end offset, 36103, was off by 4: it
+marked the start of the last entry's `+1` companion field, not the
+table's actual end) sits a contiguous run of 132 entries, each 8
 bytes: `(record_offset, record_offset + 1)`. The 132 `record_offset`
 values are **132 of RPGCompute's 133 confirmed record positions, in
 exact ascending order, each exactly 34 bytes (one record length) apart**
