@@ -1850,3 +1850,46 @@ even without decoding what those do yet.
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/extract_dlc_scripts.py`,
 `script/wd_extract/diff_dlc_scripts.py`.
+
+## Correction: the marker cadence is pervasive, not stub-specific (2026-07-16)
+
+Checked all 21 real scripts for the same `{96, 257, 97, 258}` marker
+cadence found in the DLC-check stub, to see if it helps map function
+boundaries elsewhere. **It does not narrowly mark stub functions - it
+is a pervasive, general structural element appearing throughout every
+single one of the 21 scripts**, in run lengths ranging from 4 markers
+(one cycle) up to 324 consecutive markers in `RPGCompute.eco` (at file
+offset 86711-89299) and a second 196-marker run right after it
+(89391-90955). A run that long cannot plausibly be one trivial stub
+function - `RPGCompute.eco` is the large computation-heavy library, not
+a placeholder-function-dense file.
+
+**This corrects the previous section's framing.** The DLC-check
+scripts' occurrence of this pattern isn't special because it marks
+"a stub" - it's just an unusually *short*, isolated instance of an
+otherwise-ubiquitous instruction cadence, made visible because those
+scripts are almost entirely composed of little else. The far more
+likely interpretation, given how common and long-running this pattern
+is: `96`/`97`/`257`/`258` are a **generic, frequently-used instruction**
+(most plausibly something like "push a small integer/constant onto a
+stack," alternating between two closely-related opcode variants) rather
+than anything specific to trivial placeholder bodies. This reframes but
+doesn't invalidate the DLC-check diff finding from the previous
+section - `DLC_2`/`DLC_3`/`DLC_PIRATES` genuinely are byte-identical
+generic templates, that part still stands; it's the *reason* (stub vs.
+"trivial script that's almost entirely this one common instruction")
+that changes.
+
+**This is still useful, still a positive finding, and still short of
+full semantics.** It confirms `96`/`97`/`257`/`258` form the single
+most common, cleanly-cadenced instruction pattern identified in this
+entire investigation, occurring at every scale from a handful of
+repeats to hundreds - a strong signal this is a fundamental,
+high-frequency primitive of the instruction set (a real candidate for
+"the first opcode to actually decode," if this investigation continues
+toward genuine opcode semantics), but what the two opcode-pairs
+(`96`/`257` vs. `97`/`258`) actually *do*, and what the climbing operand
+values represent, remain undetermined by static analysis alone.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/search_stub_fingerprint.py`.
