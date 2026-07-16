@@ -1126,3 +1126,76 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/scan_gap1_all_offsets.py`,
 `script/wd_extract/decode_gap1_all_alignments.py`,
 `script/wd_extract/search_whole_file_for_record.py`.
+
+## Cross-script record search — the full .eco file header format decoded (2026-07-16)
+
+Followed up on this investigation's own "unstarted future thread": checked
+whether the 34-byte record shape found in `TwoWorlds2Quests.eco` (sentinel +
+`0x80` flag + arithmetic triplet) appears in the other 20 real `.eco`
+scripts. It does - **in all 21**, 196 occurrences total (re-extracted fresh
+via `extract_eco_files_from_wd_archive`, all sizes match prior findings,
+e.g. `TwoWorlds2Quests.eco` still 179,340 bytes). This is far more general
+than the "rare, 3-location" framing of the prior section - it's a
+genuine, universal element of the `.eco` bytecode format.
+
+**The "V = self-offset - 44" arithmetic from the prior section is not a
+fixed constant - it's `V = sentinel_offset - header_length`, and
+`header_length` varies per script.** Checked the per-file constant
+against every script's own real embedded name and found an exact
+formula, holding for all 21 files with zero exceptions:
+`header_length = len(script_name) + 28`. (`TwoWorlds2Quests`'s constant
+of 44 was really `16 + 28`, not a special-cased 44 - the prior section's
+finding was correct arithmetic, just an incomplete generalization since
+only one file had been examined.)
+
+**This exposed the actual `.eco` file header layout**, previously known
+only as "`ECO\0` magic + an embedded name." Decoded and verified against
+all 21 files (byte-for-byte, via `struct.unpack`, not eyeballing):
+
+```
+offset  size  field                    notes
+0       4     magic "ECO\0"
+4       4     u32-LE constant          0x00060000 (393216) - identical in all 21 files
+8       4     u32-LE field B           varies: 2/3/4/30 - small integer, meaning unconfirmed
+12      4     u32-LE name_length       always == len(the script's own real name)
+16      N     name bytes               N = name_length, no null terminator (length-prefixed)
+16+N    4     u32-LE constant          0x33662909 (862333193) - identical in all 21 files
+20+N    4     u32-LE field C           varies per file (8 to 644), meaning unconfirmed
+24+N    4     u32-LE field D           varies per file (53 to 30453), meaning unconfirmed
+28+N    -     real bytecode/string-table content begins here
+```
+
+Total header length = `28 + len(name)`, confirmed exactly against all 21
+files with no exceptions (cross-checked two independent ways: computed
+directly from the header bytes, and confirmed it equals `sentinel_offset
+- V` for every one of the 196 record-shape matches - both methods agree
+on the same number for every file). For the two shortest scripts
+(`DLC_2.eco`, `DLC_3.eco`, header length 33), the very first byte after
+the header *is* this record's sentinel - the record sits immediately at
+the start of the bytecode section, not buried in it.
+
+**This resolves the open question from the prior section: `V` is not a
+mysterious cross-reference.** `V = sentinel_offset - header_length` is
+simply this record's own file position, re-expressed relative to the
+start of the bytecode section instead of relative to the start of the
+whole file - i.e. a **bytecode-section-relative self-offset**, not a
+pointer to some other piece of data. That is why it never matched a
+string offset and why the byte content "at" `V` (measured as an
+absolute file position) was inconsistent - `V` was never meant to be
+read as an absolute file offset in the first place.
+
+**Still open / not claimed:** the meaning of field B, field C, and
+field D (three per-file integers whose values don't obviously correlate
+with file size alone - e.g. `RPGCompute.eco` has the largest field D,
+30453, but is not the largest file; `TwoWorlds2Quests.eco`'s field C,
+644, doesn't match any quantity already confirmed in this investigation).
+Also open: what the record shape itself (sentinel + flag + self-offset
+triplet) actually *does* at the VM level - a self-referential offset is
+consistent with a jump target, an exception/handler table entry, or
+self-describing metadata, but none of those has been confirmed.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/extract_all_eco.py`,
+`script/wd_extract/search_all_scripts_for_record.py`,
+`script/wd_extract/inspect_eco_header.py`,
+`script/wd_extract/decode_all_headers.py`.
