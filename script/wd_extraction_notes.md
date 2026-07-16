@@ -1253,3 +1253,60 @@ rather than more binary analysis.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/correlate_header_fields.py`.
+
+## Record-neighbor alignment — no framing instruction found (2026-07-16)
+
+Re-pointed the "gaps between the two remaining threads" decision toward
+the more promising one: since the 34-byte record is now known to be
+universal (196 occurrences, not special to 3 sites), the "are
+`RESURRECT_EFFECT`/`translateAddedSkillPoints`/`Summons` related
+in-game" thread lost its premise - the record isn't tied to those 3
+strings specifically, it's everywhere. Redirected effort into what the
+design doc originally called Stage 2: use the confirmed record as an
+anchor and check what surrounds it, the same byte-position-invariance
+technique Stage 1 used on string literals, now anchored on a much
+stronger, universal anchor across all 196 occurrences in all 21 files
+instead of one string's dozen repeats.
+
+**Result: no consistent calling/framing instruction found.** Aligned a
+16-byte-before/16-byte-after window around every one of the 196
+confirmed record occurrences. Exactly one position came back invariant
+- the single byte immediately before the sentinel, always `0x00` - and
+every other position (15 more before, all 16 after) varied freely.
+
+**That one invariant byte is a coincidental artifact, not a real
+framing byte - checked directly, not assumed.** Inspected the actual 4
+bytes preceding several individual occurrences across different files:
+at `DLC_2.eco`'s only occurrence, those 4 bytes decode to the small
+integer 53 (the file header's own `field D`, LE-encoded, top byte
+naturally zero); at two different occurrences inside `RPGCompute.eco`
+and `MagicControl.eco`, those same 4 bytes instead spell out `"ing\0"`
+and `"ion\0"` respectively - the tail and null terminator of a
+completely unrelated preceding string. Same underlying cause Stage 1
+already diagnosed for `MARKER_CHEST`'s invariant byte: **both small
+little-endian integers (top byte usually zero) and string null
+terminators (always zero) coincidentally produce a zero byte at this
+position**, regardless of what kind of data actually precedes the
+record. It is not a marker, delimiter, or opcode belonging to the
+record's own encoding.
+
+**Stopping point (2026-07-16).** Direct byte-alignment around this
+record - even with 196 occurrences across every real script, a far
+stronger anchor than Stage 1 had - does not surface a framing
+instruction the same way it didn't for string literals. This is
+consistent with the file format's general character observed
+throughout this investigation: everything (strings, this record type,
+header fields) is packed tightly with small little-endian integers and
+no reliable padding/alignment convention, which defeats simple
+position-invariance search regardless of how good the anchor is.
+Continuing would need a fundamentally different technique - e.g.
+tracing what specific opcode/byte pattern immediately *calls into* one
+of these records at the VM level (would require understanding at least
+one real opcode first, which this investigation has not yet identified)
+rather than more alignment around this or any other anchor. Both
+previously-identified open threads (header fields B/C/D's meaning, and
+the record type's actual VM-level purpose) remain open; no fully new
+lead was found this pass.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/align_record_neighbors.py`.
