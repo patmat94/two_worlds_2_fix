@@ -1568,3 +1568,45 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/compress_pcq_runs.py`,
 `script/wd_extract/find_session_breaks.py`,
 `script/wd_extract/check_save_summaries_around_220.py`.
+
+## User-confirmed breakthrough: fork-convergence in PCQ means quest completion (2026-07-16)
+
+Asked the user directly whether any of the 6 NPCs whose `PCQ` converged
+to the same terminal value across the two independent chronological
+forks (`DLC3_ROGDOR`, `DLC3_BERNARD_VAN`, `DLC3_MASTER_LAGINU`,
+`DLC3_MENDEL`, `DLC3_LARLANDOR_UNARMED`, `DLC3_CAPTAIN_SHAGIR`) had
+actually had their questlines *completed* in this playthrough, since
+that's not something derivable from the save files alone. **The user
+confirmed all six.**
+
+**This empirically validates the pattern found in this pass: reaching a
+`PCQ` value that stays stable and reappears identically across
+independently-diverged save-history forks (rather than resetting to an
+earlier value on the next zone visit) signals that NPC's questline was
+completed.** This is the first time this whole investigation has had a
+confirmed, positive example of what "quest completed" looks like in the
+`PCQ` encoding - previously only "accepted-but-settled" (Casbrim's
+`853`) had been observed.
+
+**Casbrim's own `853` remains the open puzzle.** It shows the *exact
+same fork-convergence signature* (settles at `853` in both `[181-220]`
+and `[221-280]`, per the original investigation and this pass) that
+just got validated as "completed" for six other NPCs - yet the
+"Aktywna misja" tracked-quest field never shows Casbrim's quest as
+active, and the user's own multi-session play history never completed
+it. Two explanations, not yet distinguished: (a) fork-convergence is a
+necessary but not sufficient signal - it just means "reached the
+currently available conversation-tree depth," which happens to equal
+full completion for short quests but not for Casbrim's longer "Expert
+Side Adventure" (a title that itself implies more content than a
+typical side quest); or (b) something else in the property bag (`PSDN`,
+`PQUS`, `PQBS`, `PQTIMED` - not yet examined for this purpose) actually
+carries the real completed/not-completed distinction, and `PCQ`
+convergence alone is coincidental for the six confirmed cases.
+
+**Immediate next step, not yet done:** compare the *full* property bag
+(all keys, not just `PCQ`) between the six confirmed-completed NPCs and
+Casbrim, at their respective converged/settled saves, to check whether
+any other key (most likely candidate: `PQBS`, given the "S" could stand
+for "solved"/"state") differs in a way that distinguishes "genuinely
+completed" from "reached-current-ceiling."
