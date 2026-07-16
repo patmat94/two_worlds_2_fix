@@ -1480,3 +1480,91 @@ prior section; only "what consumes it" is unresolved by this pass.
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/extract_rpg.py`,
 `script/wd_extract/search_table_references.py`.
+
+## Back to the main goal: a broader PCQ survey, a critical save-sequence correction, and a promising new lead (2026-07-16)
+
+Zoomed back out from the `.eco` bytecode side-investigation to the
+project's actual main goal - quest-progress encoding in the save file.
+Casbrim's own `PCQ` history never showed anything past its settle value
+(`853`, accepted-but-not-completed) across the whole available save
+range, so tried a broader approach: instead of studying Casbrim alone,
+survey *every* NPC that has a `PCQ` property bag, to see whether any
+other NPC's questline shows a richer progression - possibly reaching an
+observable "completed" state that could serve as a template.
+
+**Enumerated the full roster: 40 distinct NPC entities carry a `PCQ`
+property bag** (found by locating every property bag containing `PCQ`
+in save `000280` and associating each with its nearest preceding named
+record, per the already-documented `[name][transform][...][count][k/v
+pairs]` structure) - far more than the 16 examined in the original
+Casbrim-focused pass. Tracked all 40 across every sequential save
+`000000`-`000280` (reusing the same property-bag-diff technique already
+proven for Casbrim). Several show much richer histories than Casbrim's
+3-value cycle: `DLC3_CAPTAIN_SHAGIR` (9 distinct values),
+`DLC3_Orias` (8), `DLC3_BERNARD_VAN`/`DLC3_MENDEL`/`DLC3_Darpha_Archer`/
+`DLC3_ROGDOR` (5 each), `DLC3_MASTER_LAGINU`/`DLC3_LARLANDOR_UNARMED`/
+`DLC3_ELVEN_BOWMAKER` (4 each).
+
+**Critical correction: saves `000000`-`000280` are NOT one continuous
+playthrough - there are at least 9 session breaks in the sequence.**
+Discovered by checking `parse_save_summary`'s `play_time` and `level`
+fields across the full range: playtime *decreases* (and sometimes level
+drops) between several consecutive save numbers - most dramatically
+between `000220` (level 91, playtime 11 days) and `000221` (level 80,
+playtime 1 hour 10 minutes, a completely different location and
+mission). Smaller breaks also exist at saves 69→70, 76→77, 108→109,
+121→122, 124→125, 153→154, 164→165, 180→181. **This means the save
+number is not a reliable chronology - the player reloaded an earlier
+checkpoint and continued forward multiple times, creating several
+distinct chronological segments that share the same numbered-slot
+sequence.** This is a real correction to how this whole investigation
+should treat "save order" going forward, not just for this pass -
+segments (by save number, inclusive): `[0-69]`, `[70-76]`, `[77-108]`,
+`[109-121]`, `[122-124]`, `[125-153]`, `[154-164]`, `[165-180]`,
+`[181-220]`, `[221-280]`.
+
+**A promising, convergent finding despite the discontinuity - checked
+programmatically, not eyeballed** (an earlier draft of this note
+misread `DLC3_Orias`'s two forks as converging; re-verified with a
+small script comparing each entity's exact value at save `220` vs. save
+`280`, corrected below). Segment `[181-220]` and segment `[221-280]`
+are two independent chronological forks (the second starting from an
+earlier, lower-level checkpoint than where the first one ended). Of the
+9 entities checked this way, **6 converge to the exact same terminal
+`PCQ` value at the end of both independent forks**: `DLC3_ROGDOR(90)`
+(`802` both), `DLC3_BERNARD_VAN(80)` (`757` both),
+`DLC3_MASTER_LAGINU(50)` (`805` both), `DLC3_MENDEL(40)` (`225` both),
+`DLC3_LARLANDOR_UNARMED` (`561` both), `DLC3_CAPTAIN_SHAGIR` (`2214`
+both). **`DLC3_Orias` does NOT converge** (`338` at save `220` vs. `744`
+at save `280`) - the second fork's Orias progressed further than the
+first fork ever did, rather than landing on the same value; treat this
+one as still-progressing, not settled. `DLC3_ELVEN_BOWMAKER(30)` has no
+value at save `220` (`None` - player wasn't near that NPC at that exact
+save) so isn't a valid comparison either way. Six-out-of-nine
+independently-diverged playthrough forks landing on the *same* terminal
+value for the same NPC is meaningful corroboration that those six are
+real, stable "reached current maximum progress" states for those NPCs'
+own questlines - not coincidence or noise.
+
+**Important caveat, matching Casbrim's own pattern:** Casbrim's `PCQ`
+also converges to the same value (`853`) across both forks - and we
+already know from the original investigation that `853` is
+*accepted-but-not-completed*, not confirmed-solved (the "Aktywna misja"
+tracked-quest field never shows Casbrim's quest as active in the
+available saves). So reaching a stable terminal value across forks is
+evidence of "reached the currently-available maximum progress," not
+proof of full completion - the same ambiguity that has blocked this
+investigation since the first property-bag breakthrough. **Whether any
+of `DLC3_ROGDOR`/`DLC3_BERNARD_VAN`/`DLC3_MASTER_LAGINU`/`DLC3_MENDEL`/
+`DLC3_LARLANDOR_UNARMED`/`DLC3_CAPTAIN_SHAGIR`'s questlines were
+actually *completed* (as opposed to just reaching their own "settled"
+ceiling, like Casbrim) is not something this data alone can answer - it
+needs the user's own knowledge of what was actually finished in this
+playthrough.**
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/find_pcq_roster.py`,
+`script/wd_extract/track_all_pcq_histories.py`,
+`script/wd_extract/compress_pcq_runs.py`,
+`script/wd_extract/find_session_breaks.py`,
+`script/wd_extract/check_save_summaries_around_220.py`.
