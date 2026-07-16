@@ -1610,3 +1610,58 @@ Casbrim, at their respective converged/settled saves, to check whether
 any other key (most likely candidate: `PQBS`, given the "S" could stand
 for "solved"/"state") differs in a way that distinguishes "genuinely
 completed" from "reached-current-ceiling."
+
+## Full property-bag comparison: no separate "completed" flag exists (2026-07-16)
+
+Pulled the complete property bag (every key, not just `PCQ`) for
+Casbrim and all 6 confirmed-completed NPCs at save `000280`, using the
+exact same first-occurrence-with-`PCQ` matching logic that built the
+validated `PCQ` timelines (not `find_pcq_roster.py`'s "nearest
+preceding name" heuristic, which was found to sometimes land on a
+*different* bag - e.g. a stale template copy - with a different `PCQ`
+value than the validated history; a real methodological trap worth
+remembering for any future work on this data: an entity name can have
+multiple property-bag instances in the same save, and only the
+first-occurrence-with-`PCQ` match has been cross-validated against a
+real before/after quest-accept pair).
+
+**Result: no other key distinguishes the confirmed-completed group from
+Casbrim.** `PSDN` is `0` and `PQUS` is `2` for all seven, with zero
+exceptions - identical for both the completed NPCs and Casbrim's
+not-completed state, so neither carries a completion signal. `PQTIMED`
+appears only for `DLC3_ROGDOR` and `DLC3_LARLANDOR_UNARMED` (both `0`)
+and `eStImmortalUnit` only for `DLC3_CAPTAIN_SHAGIR` (`1`, plausibly an
+unrelated combat-unit flag) - neither is consistent across the
+confirmed-completed group itself, so neither is a reliable completion
+marker either. `Lector` and `PUMN` vary per entity as expected (already
+known to be per-NPC identifiers, not state flags).
+
+**This resolves the open question from the previous section in favor
+of interpretation (a): there is no separate "completed" flag in the
+property bag.** `PCQ` fork-convergence (a value that stays stable and
+reappears identically across independently-diverged save-history
+forks) is the only observable completion signal this data provides -
+and it means "reached the currently-available conversation-tree depth
+for this NPC," which happens to coincide with true completion for the
+six (apparently shorter) confirmed quests, but not necessarily for
+Casbrim's longer "Expert Side Adventure." **The most likely explanation
+for Casbrim's `853` not being completion, despite showing the identical
+convergence signature, is that his quest simply has more stages beyond
+what's reachable in the available save history** - not a hidden
+distinguishing flag this investigation missed.
+
+**Practical conclusion for the main project goal:** the toolkit can now
+reliably detect "this NPC's questline has progressed as far as the
+available save data shows" via `PCQ` fork-convergence (or, within a
+single continuous session, via `PCQ` settling and staying constant
+across many consecutive saves without reverting) - and, per this
+session's user-confirmed cases, that signal *is* full completion for
+most quests. Confirming it specifically for Casbrim's quest would
+require either further real gameplay (a save where "Aktywna misja"
+stops tracking Gods and Demons as active, or a save further past `853`)
+or actual `.eco` bytecode decoding to determine the true length of his
+dialogue tree - the same wall this investigation's bytecode side-thread
+already reached and stopped at.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/full_bags_at_save.py`.
