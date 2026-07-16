@@ -1735,3 +1735,79 @@ coverage newly tractable) - not another pattern-search variation.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/generalize_flag_byte.py`.
+
+## Full trace of a tiny script finds a real, cross-validated instruction cadence (2026-07-16)
+
+With every offset-search/pattern-generalization idea exhausted on the
+big files, tried the other concrete idea flagged in the previous
+section: fully trace one of the smallest real `.eco` scripts
+(`DLC_2.eco`, 1468 bytes total) byte-by-byte, since its size makes
+total manual coverage newly tractable, unlike the much larger scripts
+this investigation has otherwise worked with.
+
+**Layout confirmed:** 33-byte header (already known) + the confirmed
+34-byte sentinel/flag/triplet record (bytes 33-66) + two real strings,
+`"Initialize"` (offset 67) and `"Nothing"` (offset 78) - almost
+certainly a function name and a description of its (stub) body, given
+the name. Checked whether either string's offset or length appears
+anywhere in the remaining ~1380 bytes (86 onward) as a u16/u32
+integer - a clean, complete negative (not even the tiny length values 7
+or 10 turned up), same as the big files' string-reference searches.
+
+**But the remaining bytes (86-338) are NOT random/opaque - they contain
+a real, clean, repeating instruction-like pattern**, found by decoding
+this small region as 4-byte-aligned u32-LE values instead of continuing
+to hand-trace hex (a previously-demonstrated source of error in this
+investigation). Structure: a 4-byte "marker" field cycling through
+exactly 4 values (`96`, `257`, `97`, `258`, then repeating) immediately
+followed by a 4-byte "operand" field, each pair occupying a clean
+8-byte stride - i.e. `[marker][operand]` repeating with marker values
+`96→257→97→258→96→257→97→258→...` and the operand values climbing
+roughly monotonically (`64, 100, 105, 133, 138, 172, 177, 205, 210,
+238, 243, 249, 254, 281, 286, 292, 297`, several pairs of which differ
+by exactly `5`). All operand values are valid byte offsets within this
+1468-byte file, but checking what actually sits at each such position
+(treating them as self-referential file offsets) just lands on other
+bytes of this same repeating sequence - inconclusive, likely
+coincidental range overlap rather than genuine self-reference (both the
+operand values and their own file positions happen to fall in the same
+86-338 numeric neighborhood).
+
+**Cross-validated against the other two structurally similar tiny
+scripts.** `DLC_3.eco` (also 1468 bytes) reproduces the *exact same*
+marker sequence at the *exact same* byte positions as `DLC_2.eco` -
+the two files are apparently near-duplicate "is this DLC installed"
+checks. `DLC_PIRATES.eco` (1474 bytes, name `DLC_PIRATES` is 6
+characters longer than `DLC_2`/`DLC_3`) reproduces the identical
+pattern shifted by exactly +6 bytes throughout - precisely matching the
+header-length difference from the longer name, confirming this is a
+real, position-independent structural feature of the format, not
+coincidence in one file.
+
+**This is the cleanest instruction-cadence pattern found in this whole
+investigation** - a genuine, cross-validated, fixed 8-byte instruction
+stride with a small, closed set of marker values (`96`, `97`, `257`,
+`258`) - but their actual opcode *semantics* (what each does, what the
+climbing operand values represent - byte offsets elsewhere, numeric
+literals, or something else) remain undetermined. This is a
+substantially better anchor for any future opcode-identification
+attempt than anything found in the larger, more complex scripts, since
+`DLC_2`/`DLC_3`/`DLC_PIRATES` are small enough to reason about in full
+and the pattern is already confirmed to reproduce identically across
+files.
+
+**Stopping point for this pass.** Determining what `96`/`97`/`257`/
+`258` actually do would need either dynamic analysis (not available -
+no debugger, no live instrumentation, the standing constraint on this
+entire investigation) or a much deeper static effort: manually
+correlating this exact 3-file pattern against what these DLC-check
+scripts are known to do in the game (check DLC ownership, likely set a
+flag) and treating the small marker set as a closed enumeration to
+reason about exhaustively - real progress, but a distinctly bigger
+undertaking than this pass, and a natural point to check in before
+continuing further.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/dump_dlc2_full.py`,
+`script/wd_extract/decode_dlc2_body.py`,
+`script/wd_extract/analyze_dlc2_pattern.py`.
