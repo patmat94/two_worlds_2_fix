@@ -1811,3 +1811,42 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/dump_dlc2_full.py`,
 `script/wd_extract/decode_dlc2_body.py`,
 `script/wd_extract/analyze_dlc2_pattern.py`.
+
+## The DLC-script instruction cadence is a generic, content-free template (2026-07-16)
+
+Pushed further on the newly-found instruction cadence by diffing the
+three tiny DLC-check scripts byte-for-byte, on the theory that
+whatever differs between "check DLC 2" and "check DLC 3" would
+pinpoint the DLC-ID-specific field.
+
+**Result: `DLC_2.eco` and `DLC_3.eco` are byte-identical except for
+exactly one byte** - offset 20, which is the last character of the
+script's own embedded name (`'2'` vs `'3'`, i.e. the name string
+itself, not any separate ID field). `DLC_PIRATES.eco` (whose longer
+name shifts everything after the header by +6 bytes) is **fully
+byte-identical** to `DLC_2.eco` once that shift is accounted for -
+zero differing bytes anywhere in the shared region.
+
+**This means the marker/operand instruction cadence found in the
+previous section carries zero DLC-specific content.** It's a fully
+generic template, reused verbatim for every DLC-check script - the
+game must associate a specific DLC with a specific script purely via
+the script's own name (matched externally, likely by the engine or
+some other registry not in this file), not via anything encoded in its
+bytecode. This also reframes the `"Initialize"`/`"Nothing"` strings
+found earlier: this is very likely a genuine placeholder/stub function
+body (`Initialize` that does `Nothing`), and the marker/operand pattern
+is boilerplate scaffolding for a trivial empty function - not
+business-logic opcodes.
+
+**Reframed as a positive tool rather than a dead end: this is now a
+confirmed fingerprint for "a trivial/stub function body."** If the same
+exact byte pattern appears inside a larger, business-logic-bearing
+script (e.g. `TwoWorlds2Quests.eco`), it would help delineate function
+boundaries there - a stub function is still a function, and finding
+several would map out where real (non-stub) function bodies must sit,
+even without decoding what those do yet.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/extract_dlc_scripts.py`,
+`script/wd_extract/diff_dlc_scripts.py`.
