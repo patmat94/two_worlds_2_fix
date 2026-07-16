@@ -1893,3 +1893,43 @@ values represent, remain undetermined by static analysis alone.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/search_stub_fingerprint.py`.
+
+## Tying the two threads together: PCQ/quest-ID constants not found among push-constant operands (2026-07-16)
+
+With dynamic analysis confirmed off the table (asked the user directly
+rather than continuing to assume it), tried the most promising
+remaining static idea: use the newly-confirmed `{96,257,97,258}`
+"push a constant" instruction pattern as a structural anchor to search
+for the *already-known-semantic* `PCQ` transition values (`20`, `3483`,
+`853`, confirmed via the real before/after quest-accept save pair) and
+quest IDs (`45` for `Q_45`, `2` for `GROUP_2`, confirmed via
+cross-language validation) inside `TwoWorlds2Quests.eco` specifically -
+the one script that actually contains this quest's logic. This is a
+structurally-anchored test (only checking operands of a confirmed,
+cleanly-cadenced instruction, not a blind byte scan), unlike earlier
+Stage 1 attempts that searched raw bytes near string anchors.
+
+**Result: clean, complete negative.** Found 88 total marker+operand
+pairs in `TwoWorlds2Quests.eco`'s clean (8-byte-stride, full-cycle)
+runs of this instruction. Zero of the 88 operands match any of the 5
+target constants. Whatever mechanism actually compares against `PCQ`'s
+values in the compiled quest logic, it isn't via this specific "push a
+small constant" instruction carrying one of these literal numbers as
+its direct operand.
+
+**Assessment: the static-analysis avenues for this bytecode are now
+genuinely exhausted for connecting it back to the save-file findings.**
+Across this investigation: string-offset anchoring (Stage 1), gap
+content inspection, absolute and relative offset-reference search,
+flag-byte generalization, full manual tracing of a tiny script, and now
+this constant-value cross-reference have all been tried. Real further
+progress would need either dynamic analysis (confirmed unavailable) or
+accepting that identifying actual opcode semantics from static bytes
+alone, with no ground truth beyond structural self-consistency, is a
+fundamentally harder problem than this investigation's find-and-
+correlate techniques can solve - a legitimate stopping point for this
+side-thread, not a failure of effort.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/extract_quests.py`,
+`script/wd_extract/search_pcq_constants.py`.
