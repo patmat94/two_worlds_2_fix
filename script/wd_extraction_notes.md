@@ -1310,3 +1310,100 @@ lead was found this pass.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/align_record_neighbors.py`.
+
+## Jump/branch-target detection — a real record-index table found in `RPGCompute.eco` (2026-07-16)
+
+Tried a genuinely different technique from the alignment approach used
+three times already: instead of looking for fixed framing around an
+anchor, searched every byte position in each `.eco` file for u16/u32
+integers (both endiannesses) that exactly match the absolute file offset
+of a confirmed 34-byte record's own start or end position - the
+"branch/jump instruction" idea from the original design doc, using the
+196 confirmed records as landing sites instead of raw string offsets
+(which Stage 1 Task 5 already ruled out).
+
+**First pass produced a lot of hits, almost all noise.** A naive
+assumption that "a u32 exact match is inherently much less likely to be
+coincidental than u16" turned out **wrong for this dataset**: record
+offsets are small numbers (well under 65536 for most files), so as
+u32-LE they have zero high bytes - and this file format is full of
+null-byte padding, so small-value matches (especially against a target
+set that includes the tiny `body_start`/header-length values) occur
+constantly by chance. Dropped `body_start` from the target set (pure
+noise, confirmed on the first pass) and built a **randomized control
+test**: for each file, shifted every real target by a fixed offset
+(preserving count and rough magnitude but pointing at positions that
+are *not* real record boundaries), re-ran the identical search, and
+compared real vs. shifted-fake hit counts - repeated with 30
+independent random shifts for the two files whose initial 3-shift
+comparison looked interesting, to get a reliable noise-distribution
+estimate rather than trusting a small sample.
+
+**Result: `RPGCompute.eco` shows an overwhelming, unambiguous signal;
+`TwoWorlds2Quests.eco`'s initially-interesting signal turned out to be
+noise on closer inspection.**
+
+- `RPGCompute.eco`: real u32 hit count 188, vs. a control distribution
+  (30 random shifts) with mean 8.7 and max 64 - the real count exceeds
+  *every single one* of the 30 control shifts (z-score 13.4). This is
+  not explainable by chance.
+- `TwoWorlds2Quests.eco`: real count 25 sits at the 97th percentile of
+  its own 30-shift control distribution, but one control shift scored
+  70 - higher than the real count - making the control distribution
+  itself unreliable/skewed and the "signal" not trustworthy on this
+  evidence alone. Checked why: the real hits are overwhelmingly just
+  two small values (`183`, `217` - one record's own start/end offset)
+  recurring at scattered, non-contiguous positions, not an ordered
+  table - consistent with coincidental small-value recurrence, the same
+  root cause already diagnosed for this file's earlier false leads.
+
+**Decoded the `RPGCompute.eco` signal directly - it is a literal
+record-index table, not just a statistical anomaly.** At file offset
+35051-36103 (1052 bytes, all standard 4-byte-aligned u32-LE reads, no
+alignment trick needed) sits a contiguous run of 132 entries, each 8
+bytes: `(record_offset, record_offset + 1)`. The 132 `record_offset`
+values are **132 of RPGCompute's 133 confirmed record positions, in
+exact ascending order, each exactly 34 bytes (one record length) apart**
+- verified programmatically, not eyeballed. Only the file's very last
+record (offset 30457) is absent from the table; every other confirmed
+record from the first (25969) through the second-to-last (30423) is
+present, contiguous, correctly ordered, with no gaps or out-of-order
+entries.
+
+**Checked every other file with 3+ records for the same table shape -
+none has one.** `ConfigCampaign`, `heroControl`, and `JSTestCampaign`
+each have exactly one isolated match (a single record referenced once,
+not a run); `Default_Events_Script`, `JSTestCampaign_2`, `Sounds_Script`,
+`Test_maps`, `TwoWorlds2Quests`, `TwoWorlds2Trainers`, and
+`Weather_Script` have none at all. **This table mechanism, as found, is
+specific to `RPGCompute.eco` among all 21 real scripts** - not (yet)
+confirmed as a general `.eco` format feature.
+
+**Interpretation:** this is the clearest evidence found in this entire
+investigation of one part of an `.eco` file's bytecode referencing
+another part by absolute file offset - the exact "how does bytecode
+reference other structures" question this project has been chasing
+since Stage 1. `RPGCompute.eco` is already an outlier on every other
+measured quantity in this investigation (most records by a wide margin,
+most strings, header field B = 30 instead of the near-universal 2/3/4)
+- consistent with it being a fundamentally different kind of file (a
+large shared function/utility library with ~133 callable routines)
+that specifically needs an index/dispatch table, unlike the other 20
+scripts which have too few records for such a structure to show up
+this way (or use a different, not-yet-found mechanism).
+
+**Still open:** the meaning of the `+1` companion value in each pair;
+why exactly 132 entries rather than 133 (the missing last record);
+what actually *reads* this table (no calling instruction/opcode
+identified yet - this establishes the table's existence and shape, not
+what consumes it); and whether the other 20 files reference their own
+records by some different, not-yet-found mechanism, or don't need to at
+all.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/search_jump_targets.py`,
+`script/wd_extract/jump_target_control_test.py`,
+`script/wd_extract/rigorous_control_test.py`,
+`script/wd_extract/decode_rpg_index_table.py`,
+`script/wd_extract/decode_table_full_range.py`,
+`script/wd_extract/check_all_files_for_tables.py`.
