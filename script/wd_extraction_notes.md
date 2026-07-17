@@ -2089,3 +2089,50 @@ User asked for `DLC3_ABRAHAM_VAN`'s and `DLC3_BERNARD_VAN`'s specific
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/track_abraham_bernard.py`.
+
+## Correction: fork-convergence is necessary but not sufficient for completion (2026-07-16)
+
+User confirmed `DLC3_ABRAHAM_VAN`'s quest is **not** completed - it is
+"still active" and has a bug, same category of problem as Casbrim's.
+This is a real correction to the "PCQ fork-convergence signals
+completion" rule established earlier this session: Abraham shows the
+identical convergence signature (settles at `566`, reappears
+identically across both independently-diverged chronological forks)
+that was validated as a completion signal for six other NPCs - but his
+quest is genuinely stuck, not finished. **Fork-convergence means
+"reached the current maximum reachable dialogue state" - which
+happens to coincide with true completion for most quests observed so
+far, but is not proof of it.** Casbrim was the first known exception;
+Abraham is the second.
+
+**Re-ran the full property-bag comparison with much stronger
+statistical power: 2 known-bugged NPCs (Casbrim, Abraham) against all
+38 other roster entities (all confirmed working fine by the user), not
+just the 6 originally checked.** Built the roster fresh from save
+`000280` and pulled every property key for all 40 entities. Result:
+**still no distinguishing flag.** `PSDN` is `0` for every entity
+including both bugged ones. `PQUS` is `2` for both bugged NPCs, but the
+working group itself contains a mix of `0` and `2` - not a clean split.
+`PQTIMED`, `INV`, `LSU`, `WasHitByMultiArrow`, and `eStImmortalUnit`
+are each `None` (absent) for both bugged NPCs, but the working group
+also has many entities where each of these is `None` too - none of
+them is universally present in "working" and absent in "bugged," or
+vice versa. (`Lector`, `PCQ`, and `PUMN` are inherently per-entity
+unique identifiers, not shared flags, so their bugged values trivially
+not matching anyone else's is expected and not a meaningful signal.)
+
+**This strengthens, not just repeats, the earlier negative finding.**
+With 38 working examples instead of 6, the absence of any distinguishing
+property is much more conclusive: **the save file's property-bag
+system genuinely does not expose a marker that would let us tell a
+bugged quest apart from a working one.** Whatever is wrong with
+Casbrim's and Abraham's quests, it must live in the `.eco` script logic
+itself (their specific compiled dialogue trees or trigger conditions),
+not in anything visible in the save data - consistent with, and now
+doubly confirmed by, the earlier conclusion that further progress here
+needs actual opcode decoding (blocked without dynamic analysis) rather
+than more save-file analysis.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/compare_bugged_vs_working.py`,
+`script/wd_extract/compare_bugged_vs_all.py`.
