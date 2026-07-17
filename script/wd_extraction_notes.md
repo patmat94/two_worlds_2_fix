@@ -2005,3 +2005,65 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/locate_casbrim_pcq_bytes.py`,
 `script/wd_extract/patch_casbrim_pcq_candidates.py`,
 `script/wd_extract/verify_patched_saves.py`.
+
+## Combined reposition+PCQ candidates, and the "PCQ never duplicated across quests" assumption falsified (2026-07-16)
+
+Two follow-ups requested: (1) the PCQ-candidate saves need Casbrim's
+position fix too, since he's not otherwise visible/findable; (2) a
+list of "possible" PCQ values, on the user's working assumption that
+PCQ increases monotonically and is never reused across different
+quests/NPCs.
+
+**Combined saves delivered by reapplying the exact confirmed-working
+byte diff, not re-deriving the float patch.** Diffed
+`000280_casbrim_repositioned.TwoWorldsIISave` (from the original
+2026-07-11 position experiment) against the plain original `000280` at
+the byte level: exactly 23 differing bytes, all within Casbrim's own
+transform region (chunk offsets 1535789-1535847) - completely disjoint
+from the PCQ value's location (1535901), confirmed non-overlapping.
+Reapplied those same 23 bytes on top of each PCQ candidate in one
+patch pass:
+- `files/quest_saves/000280_casbrim_repositioned_pcq_854.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_900.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_999.TwoWorldsIISave`
+
+Verified: original's hash unchanged; each combined file has exactly
+23 position-patch bytes plus only the expected PCQ digit changes (1
+differing digit for `854` vs. `853`, 3 for `900`/`999`) - nothing else
+touched.
+
+**Built a global catalog of every distinct PCQ value ever observed for
+all 40 roster entities across the full 0-280 save range, to test the
+"never duplicated" assumption directly rather than assume it.** Result:
+**the assumption is empirically false.** Excluding same-entity
+bare-name/`(NN)`-suffix pairs (which are the same NPC's own two bag
+instances, not different quests), there are genuine cross-entity
+duplicates: `DLC3_ROGDOR` (one of the six confirmed-completed quests
+from earlier this session) shares the exact values `89`, `991`, and
+`992` with `DLC3_KING_TALINOR` and `DLC3_Darpha_Archer` - completely
+different, unrelated NPCs. This is consistent with `PCQ` being a
+conversation/dialogue-state index drawn from a **shared, reusable pool**
+(e.g. common dialogue-tree template nodes), not a globally unique
+per-quest identifier - so "value X is unused elsewhere" cannot be
+treated as confirmation that X is a valid or safe guess for Casbrim's
+own quest, only as one weak, non-conclusive data point.
+
+**With that caveat clearly stated, the observed global value landscape**
+(88 distinct values across 40 entities, full range `0` to `3489`):
+`[0, 1, 7, 12, 18, 20, 21, 22, 25, 47, 55, 63, 73, 74, 89, 118, 145,
+149, 150, 166, 167, 181, 183, 184, 191, 198, 199, 200, 202, 204, 207,
+218, 225, 226, 227, 228, 230, 238, 267, 270, 292, 338, 346, 445, 454,
+456, 458, 463, 471, 561, 563, 566, 595, 630, 653, 659, 666, 667, 729,
+730, 744, 746, 756, 757, 765, 781, 785, 789, 793, 794, 795, 802, 805,
+810, 830, 840, 853, 937, 985, 991, 992, 1202, 1206, 1242, 2112, 2214,
+3483, 3489]`. Immediately above Casbrim's `853`, the range `854-936` is
+completely unused by any of the 40 cataloged entities - the widest
+open gap directly adjacent to his stuck value. The two already-chosen
+higher candidates (`900`, `999`) both land in currently-unused gaps
+(`854-936` and `993-1201` respectively) - not derived from this
+analysis, but not contradicted by it either.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/diff_repositioned_save.py`,
+`script/wd_extract/patch_reposition_and_pcq.py`,
+`script/wd_extract/build_global_pcq_catalog.py`.
