@@ -2067,3 +2067,25 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/diff_repositioned_save.py`,
 `script/wd_extract/patch_reposition_and_pcq.py`,
 `script/wd_extract/build_global_pcq_catalog.py`.
+
+## Direct answer on Abraham/Bernard Van, and a newly-noticed convergence case (2026-07-16)
+
+User asked for `DLC3_ABRAHAM_VAN`'s and `DLC3_BERNARD_VAN`'s specific
+`PCQ` values (both side-quest NPCs). Got precise full histories:
+
+- `DLC3_BERNARD_VAN(80)`: cycles `181→183→184` per visit, settles at
+  `184`, converges to **`757`** at the end of both independent
+  chronological forks (`220` and `280`) - already user-confirmed
+  completed earlier this session.
+- `DLC3_ABRAHAM_VAN(67)`: cycles `63→566` per visit, settles at `566`,
+  **also converges to `566`** at the end of both forks (`220` and
+  `280`) - the identical fork-convergence signature already validated
+  as a completion signal, but Abraham wasn't among the original 9
+  candidates checked for this (he only had 2 distinct values in the
+  first summary pass, below the threshold used to pick candidates
+  worth a closer look). **Not yet confirmed by the user** whether
+  Abraham's own quest was actually completed - flagged for the user to
+  confirm, same as the original six.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/track_abraham_bernard.py`.
