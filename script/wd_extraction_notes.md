@@ -2136,3 +2136,113 @@ than more save-file analysis.
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/compare_bugged_vs_working.py`,
 `script/wd_extract/compare_bugged_vs_all.py`.
+
+## First dynamic analysis session (Cheat Engine, live game process) (2026-07-16/17)
+
+User has the game installed on another machine and ran live memory
+analysis with Cheat Engine, working iteratively over several rounds.
+Static analysis of the `.eco` bytecode had hit a wall earlier in this
+investigation (no dynamic analysis available at the time) - the user
+later confirmed access to a second machine with the game installed,
+making this possible. Full session summarized here since it produced
+the first-ever *live* confirmation of where Casbrim's quest data
+actually sits in memory, not just in the save file.
+
+**False leads found and correctly identified as noise:**
+- An initial naive value-scan for `853` landed on a location that
+  turned out to be a **3D terrain/environment grid lookup**
+  (disassembly showed the classic pattern: two coordinates masked to
+  0-63, combined into a grid index, multiplied by a 16-byte stride,
+  used to index a base array) - `853` just happened to be sitting in
+  that terrain cell's data by coincidence. Explains why it never
+  changed (static per-location data) and was read thousands of times
+  (continuous terrain/rendering queries).
+- A scan for `20` landed on a classic reference-counting pattern
+  (`add [esi+0C],-01` / `inc [esi+0C]`, i.e. AddRef/Release) used
+  throughout the engine for unrelated objects - not Casbrim-specific.
+- Several other captured writes hit generic engine infrastructure:
+  `amdxx32.dll` memcpy routines, global "pending operation" counters,
+  and global UI-selection-state writes - all unrelated noise from
+  scanning for common small integers in a complex 3D engine.
+
+**Real structure found - anchored on the entity name string, not a
+guessed value.** String-scanned for `DLC3_CHANCELLOR_CASBRIM` directly
+(14 hits, most are unrelated tables - only some are the live entity
+record). Bounded a value-scan for `2`/`23`/`853` to a narrow window
+around one specific hit and found a 9-slot cluster of 4-byte values,
+32 bytes total, that **exactly reproduced known historical constants**:
+
+```
+offset  value
+-0x10   3484   <- Casbrim's PCQ *before* accepting the quest (original save pair)
+-0x0C    706
+-0x08    705
+-0x04   3483   <- Casbrim's PCQ *right after* accepting the quest (original save pair)
+ 0       853   <- current stuck value
++0x04    741
++0x08    192
++0x0C    189
++0x10    752
+```
+
+Finding both `3484` and `3483` - the exact two values that first proved
+`PCQ` was quest-relevant, months earlier in the save-file analysis -
+sitting 12 bytes apart next to the current `853` is not a coincidence;
+this is genuinely Casbrim's data. The other six values (`706`, `705`,
+`741`, `192`, `189`, `752`) are unexplained - never observed in any
+save file for Casbrim, so likely either other historical checkpoints
+this investigation's save sample never captured, or unrelated adjacent
+data.
+
+**Critical dynamic-analysis result: nothing reads OR writes this
+address during a live conversation with Casbrim.** Wrote breakpoints
+on all 9 addresses (re-anchored fresh after a save reload invalidated
+the first set of addresses - heap-allocated arrays get rebuilt from
+scratch on load, so raw addresses are not stable across reloads, a
+real trap hit and correctly diagnosed mid-session), talked to Casbrim
+through a full conversation using the repositioned save so he's
+visible: **zero hits on "find what writes," and zero hits on "find
+what accesses" (reads included).** This is stronger and more direct
+evidence than anything static analysis produced this session: **his
+dialogue logic has completely stopped referencing this memory location
+- not "checks it and evaluates wrong," but doesn't touch it at all.**
+This specific address is most likely a checkpoint/log value (matching
+the earlier observation that a write fires when a save loads) rather
+than the live variable his conversation logic actually consults - the
+real live trigger, if `PCQ`-based at all, must be somewhere else not
+yet located.
+
+**Live-edited the confirmed address to several values directly in
+memory (fastest possible test - no save/reload needed) - no change
+observed in Casbrim's dialogue for any of them**, consistent with the
+"nothing accesses it" finding: changing a value that's never read
+cannot change behavior.
+
+**User asked to proceed with save-file test candidates anyway, using
+the real values found in the memory cluster instead of arbitrary
+guesses.** Given the direct dynamic-analysis evidence that this
+address isn't consulted during conversation, these are understood
+to be unlikely to change anything - but low-cost to test, and it's the
+user's call. Generated six combined (repositioned + PCQ) candidate
+saves, reusing the same confirmed position-patch diff as before:
+- `files/quest_saves/000280_casbrim_repositioned_pcq_706.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_705.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_741.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_192.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_189.TwoWorldsIISave`
+- `files/quest_saves/000280_casbrim_repositioned_pcq_752.TwoWorldsIISave`
+
+Verified: original's SHA-256 unchanged; each candidate's other data
+byte-identical except the intended PCQ digit change plus the same 23
+position-patch bytes reused throughout this thread.
+
+**If these also show no change (expected given the dynamic evidence),
+the productive next direction is not more `PCQ` values - it's finding
+what *does* get touched at the moment his dialogue starts**, via an
+assumption-free "unknown initial value -> changed value" scan across
+the actual conversation, even though that approach proved difficult in
+practice this session (very large candidate counts, short dialogue
+window making it hard to narrow down step-by-step).
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/patch_memory_cluster_candidates.py`.
