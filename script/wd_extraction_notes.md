@@ -2246,3 +2246,152 @@ window making it hard to narrow down step-by-step).
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/patch_memory_cluster_candidates.py`.
+
+## Breakthrough: `PCQ` is literally the numeric ID in the game's own `DQ_<N>_...` dialogue-line system
+
+User tested one of the 6 memory-cluster candidate saves,
+`000280_casbrim_repositioned_pcq_189.TwoWorldsIISave`, live in-game.
+Unlike every other candidate, `PCQ=189` produced **real, new dialogue**:
+Casbrim opens differently, and two new topic options appear ("Ta bestia,
+która Cię zaatakowała...?" / "Tamto twoje zadanie...?"). Clicking the
+second gave a "too soon" response. Full captured text saved by the user
+in `files/PCQ_189/PCQ_189.txt`.
+
+This is the first-ever confirmed (value <-> real text) ground truth in
+this entire investigation - everything before this was inference.
+Searched `DLC3_PC_POL.wd` for the exact captured Polish text
+(`script/wd_extract/search_new_dialogue_text.py`, ASCII-safe fragments,
+utf-16-le/ascii/cp1250) and found it sitting immediately next to literal
+named records `DQ_189_M.I1_2`, `DQ_189_M.I2_1`, `DQ_189_1.NO_1`,
+`DQ_189_1.NO_2`, and the "goodbye" line next to `DQ_20_M.BYE_1` (20 was
+one of Casbrim's own historical `PCQ` values). **Conclusion: `PCQ`'s
+value is literally the `<N>` in the game's `DQ_<N>_<node>` dialogue-line
+ID naming convention** - i.e. `PCQ=189` means "Casbrim is currently
+parked at dialogue group `DQ_189`."
+
+This one confirmed data point retroactively explains everything found
+earlier this session: the "fork convergence" signal, the fact `PCQ` is
+drawn from a large shared/reused pool (not a simple counter, not unique
+per quest) - it's an index into the whole game's dialogue-ID space,
+shared across every NPC and quest that uses this dialogue system.
+
+### Mapping the full `DQ_<N>` naming convention
+
+Enumerated every `DQ_<N>_...` record in the same decompressed block
+(`DLC3_PC_POL.wd`, zlib block at offset 591872) via
+`script/wd_extract/map_dq_ids_near_casbrim.py`: **269 distinct `DQ_<N>`
+numbers** exist in this one block alone (range 1-3489), confirming the
+ID space is large and shared by many characters/quests, not
+Casbrim-specific.
+
+Extracted the complete text tree for `DQ_189_*` (24 records,
+`script/wd_extract/extract_dq189_text.py`) and decoded the node-suffix
+convention:
+- `0.FT_<i>` - "first time" cutscene, plays once when a state is first
+  entered
+- `0.QNT_0` - repeat-visit greeting if the offer hasn't been
+  accepted/declined yet ("quest not taken")
+- `0.QT_0` - repeat-visit greeting after taking the offer ("quest
+  taken")
+- `0.QC_0` - a wrap-up/closing line
+- `1.TAKE_<i>` - the branch that plays if the player accepts an offer
+- `1.NO_<i>` - the branch if the player declines
+- `1.FIGHT_<i>` - a third branch, apparently conditioned on unrelated
+  prior state
+- `2.CLOSE_<i>` - closing dialogue for a delivered/finished task
+- `M.I1_<i>`, `M.I2_<i>` (occasionally `M.I3_<i>`) - the two (or three)
+  info-topic menu options shown when idly talking
+- `M.BYE_1` - the goodbye line
+
+`DQ_189`'s full tree (Polish text, translated inline below): the
+`0.FT_0..2` cutscene is Casbrim thanking the player for saving his life
+from a beast; `1.TAKE_1..10` is the real quest hook - Bronze/Brass
+Guardian "hearts" are actually magic gems, mined only by humans before
+the Troubles, sealed shut since; Casbrim gives a ring that opens the
+seal and warns "whatever's down there had thirty years to grow"; names
+the traitor mage **Teramon** as having been fascinated by the gems.
+`1.NO_1/2` is exactly the "too soon" text the user captured. `1.FIGHT_2`
+has Casbrim ask *"since you've dealt with **Finglor's** matter, is that
+what this is about? ...ask me for something else"* - i.e. a third
+response variant that references Finglor. `M.I1/M.I2/BYE` is exactly the
+idle menu the user actually saw and clicked (reusing `NO_1/2` text as
+the default greeting) - confirming that force-setting `PCQ` via save
+edit lands the game in this state's **menu shell** without ever running
+the `FT_*`/`TAKE_*` cutscene, since that requires the game's own
+scripted trigger, not just the raw value.
+
+### Filtering 269 candidates down to Casbrim's actual quest chain (by content, not ID proximity)
+
+User asked whether we can identify which `DQ_<N>` numbers are
+quest-related without brute-force testing all 269. Wrote
+`script/wd_extract/filter_casbrim_dq_ids.py`: extracted text for every
+number's every record and kept only numbers whose text matches
+Casbrim-chain vocabulary (kanclerz/chancellor, Teramon, Spiżowi
+Strażnicy/Bronze Guardians, Finglor, kopalni/mine, klejnot/gem, Casbrim
+by name). Narrowed 269 -> 59 numbers
+(`script/wd_extract/casbrim_dq_candidates.txt`, not committed - the
+whole `wd_extract/` scratch directory is gitignored; the summary here
+captures everything load-bearing from it).
+
+**Important refinement on reading that list**: most of the 59 are
+*other* NPCs' dialogue that merely *references* Casbrim or Finglor (e.g.
+"Bądź cierpliwy, kanclerzu" said *to* Casbrim by another character,
+appearing in `DQ_849`/`850`/`852`/`905`/`1252`/`3489` etc.) - not
+Casbrim's own spoken lines. Distinguishing "Casbrim is the speaker" from
+"Casbrim is referenced/addressed" requires reading each hit's voice, not
+just keyword-matching. Only `DQ_20`, `DQ_3483`, `DQ_853`, `DQ_189` were
+confirmed as Casbrim's own historical/current/tested states by this
+method; `DQ_752`, `DQ_907`, `DQ_908` are strong candidates (first-person
+lines about "giving another mission" post-Finglor, in a voice consistent
+with Casbrim) but not yet confirmed as his.
+
+### The actual bug location, confirmed: `DQ_853`'s own live tree is a designed dead end
+
+Extracted the full (unedited, currently-live) `DQ_853_*` tree - only 6
+records, the complete state Casbrim has been stuck at this whole
+session, no save-editing involved:
+
+```
+DQ_853_0.FT_0: "Ah, that's all. I heard you arrived at Wolnoport."
+DQ_853_1.TAKE_1: "I arrived."
+DQ_853_1.TAKE_2: "Whatever the queen wanted done, better do it. Our lady doesn't like asking twice."
+DQ_853_1.TAKE_3: "Speaking of asking favors... you were going to ask me to do something for you. After the Finglor matter, remember?"
+DQ_853_1.TAKE_4: "Not yet, human. Patience!"
+DQ_853_0.QC_0: "Good luck with your task. Check back later."
+```
+(translated from Polish; see `casbrim_dq_candidates.txt` / re-run
+`extract_dq189_text.py`-style dump for exact source strings)
+
+**`TAKE_4` ("Not yet, human. Patience!") has no further branch - this is
+the entire node.** This is not evidence of missing/corrupted content; it
+is a designed "condition not yet met" response, and the game is playing
+it correctly. The gate references "arrived at Wolnoport" (a
+Freeport/main-storyline location), meaning **Casbrim's own progression
+past 853 is keyed to the player's state in an unrelated, non-Casbrim
+storyline thread**, not to anything in Casbrim's own property bag
+(`PCQ`, `PSDN`, `PQUS`, `Lector`, `PUMN` - none of these encode it).
+
+This is corroborated by `DQ_3483` (the state immediately prior, in
+Casbrim's own voice): after declining to personally search the island,
+Casbrim says *"I was considering giving you another mission... more
+important than the Finglor matter... When - and if - the time comes,
+we'll revisit this conversation."* That is the game's own scripted
+"postponed, external condition pending" language, one step upstream of
+the `853` dead end.
+
+**Practical implication for the user's bug**: this is very unlikely to
+be fixable by editing Casbrim's own `PCQ`/property-bag values alone,
+because `853`'s own live behavior is not itself broken - it is correctly
+waiting on a condition that lives elsewhere. The next concrete,
+non-blind-guess research direction is identifying what "Wolnoport"/
+Freeport-thread flag this wait is actually keyed to (a global/other-NPC
+quest-progress value, not Casbrim's own bag) and checking whether that
+flag is in an unexpected state in the user's save - this is a
+plan/direction, not yet executed.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/search_new_dialogue_text.py`,
+`script/wd_extract/map_dq_ids_near_casbrim.py`,
+`script/wd_extract/extract_dq189_text.py`,
+`script/wd_extract/filter_casbrim_dq_ids.py` (output committed as
+`script/wd_extract/casbrim_dq_candidates.txt`).
