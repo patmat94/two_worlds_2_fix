@@ -2389,9 +2389,87 @@ quest-progress value, not Casbrim's own bag) and checking whether that
 flag is in an unexpected state in the user's save - this is a
 plan/direction, not yet executed.
 
-Scratch scripts for this pass (gitignored, not committed):
+Scratch scripts for this pass (gitignored, not committed, along with
+their outputs since the whole `wd_extract/` directory is ignored):
 `script/wd_extract/search_new_dialogue_text.py`,
 `script/wd_extract/map_dq_ids_near_casbrim.py`,
 `script/wd_extract/extract_dq189_text.py`,
-`script/wd_extract/filter_casbrim_dq_ids.py` (output committed as
+`script/wd_extract/filter_casbrim_dq_ids.py` (output:
 `script/wd_extract/casbrim_dq_candidates.txt`).
+
+## Following up: is the `DQ_853` wait-gate flag actually in the save file at all?
+
+User pushed back with a strong, concrete point: they report having
+already done what should satisfy the gate (visited Wolnoport, have
+sufficient elf reputation) yet `DQ_853` is still stuck - and asked
+whether the gate might live somewhere other than an NPC's own property
+bag (a global flag, a location marker, a trigger volume).
+
+Did a comprehensive sweep of the whole `000280` save, not limited to
+Casbrim:
+
+1. **Every distinct property-bag key in the entire save, at both
+   `max_props=30` and `max_props=250`** (to rule out a single
+   many-key "global state" bag being truncated): **72 distinct keys,
+   identical result at both caps.** No `reputation`/`faction`/`journal`
+   key exists under any name. The largest single bag (15 keys, offset
+   631821) is the player's own stat/skill-point bag (`UPTIG`, `UPTLL`,
+   numeric skill-ID keys `404`/`505`/`606`/`707`, `_LAST_BOAT_POS_`) -
+   confirmed there's no adjacent "quest flags" bag hiding among the
+   player's own data either.
+2. **`INV_PLACEHOLDER_QUESTLOG`/`_REPUTATION`/`_MAP`/`_ACHIEVEMENTS`** -
+   found via keyword search, looked promising by name. Turned out to be
+   plain UI inventory-slot entries (icons for the in-game menu tabs), no
+   embedded property bag, no state data at all - a dead end.
+3. **Property-bag keys that are literal `.eco` script paths**
+   (`Scripts\Campaigns\Missions\DLC_3.eco`, `TwoWorldsQuests.eco`, etc.,
+   128 `EmptyMission.eco` occurrences) - looked like a possible
+   mission-state list. Their values are only ever `"Nothing"` or
+   `"Initialize"` - this is each entity's associated controller-script
+   state-machine name (same "Initialize"/"Nothing" states seen in the
+   tiny DLC-check `.eco` scripts earlier this session), not a numeric
+   flag or counter.
+4. **Named records matching `/rep/i`**: found `MotharkTraderHiRep` /
+   `LowRep`, `OutworldTraderHiRep`/`LowRep`, `QuartermasterHiRep`/`LowRep`
+   - genuine reputation-gated content, but implemented as **duplicate
+   Hi-Rep/Lo-Rep entity pairs for 3 trader NPCs**, where the engine
+   presumably spawns/activates only one of each pair - not as a stored
+   numeric reputation counter anywhere readable. This is the only place
+   "reputation" manifests mechanically in this save's structure, and it
+   doesn't obviously connect to Casbrim's own gate.
+5. **The literal string "Wolnoport" does not appear anywhere in the save
+   file** (checked both ASCII and UTF-16LE across every decompressed
+   block) - locations aren't stored as a visited-history list of place
+   names; only the player's *current* location is tracked (via the
+   `"Miejsce:"`-anchored summary string already used by
+   `parse_save_summary`). There is no "have you been to Wolnoport" flag
+   to find, full stop - it cannot exist in this save under that name.
+
+**Conclusion: this is a real, decisive negative result, not an
+unfinished search.** The save file's property-bag/named-record system
+does not expose any reputation, journal, or global quest-flag structure
+under any name or location tried. Casbrim's dialogue-script condition
+for leaving `DQ_853` almost certainly isn't a simple stored save-file
+value at all - it's either computed at runtime from state this
+investigation has already shown carries no distinguishing signal
+(6+ months of comparing bugged vs. working NPCs' full property bags
+found zero difference), or it lives purely inside the `.eco` bytecode's
+own internal logic, which static analysis in this project has
+consistently hit a wall trying to decode.
+
+**Two concrete next directions, not yet executed:**
+- **Empirical, not name-guessing**: if the user can identify roughly
+  which of their own saves bracket the moment they believe they crossed
+  the Wolnoport/reputation milestone, diff those two saves the same way
+  the original `PCQ` mechanism was discovered (byte-level `diff_saves`,
+  looking for *any* change, not a targeted key) - this doesn't require
+  knowing the flag's name in advance.
+- **Dynamic analysis** (confirmed available via the user's second
+  machine): a live breakpoint/write-trace at the exact moment
+  `DQ_853_1.TAKE_4` ("not yet, patience") is chosen would show precisely
+  what value/address Casbrim's script actually reads for that branch -
+  far more direct than any further static guessing, and the same
+  technique already used successfully to find his memory cluster.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/survey_global_flags.py`.
