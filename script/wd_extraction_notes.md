@@ -2597,3 +2597,103 @@ now the single most promising untested candidate available.
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/extract_full_dq_trees.py`,
 `script/wd_extract/patch_casbrim_pcq_907.py`.
+
+## Consolidated PCQ candidate batch, both repositioned and original position
+
+**User asked for a single folder with all good remaining PCQ candidates
+(not just 907/752), both repositioned and non-repositioned, on the
+hypothesis that Casbrim's position might itself matter.** First
+double-checked whether the earlier untested memory-cluster values
+(`706`, `705`, `741`, `192`) are real `DQ_<N>` ids at all (they'd
+previously produced *no* interaction at all, unlike `189`'s partial
+success) - **they do exist, but are confirmed not useful**: `706`/`705`
+are two isolated lines about an unrelated "Sphere"/`Kula` side-plot (not
+full conversations); `741` is a generic "Not now, human" busy/
+unavailable stub; `192` is a **combat bark** ("Help! Kill this beast!").
+This directly explains the user's earlier report of not being able to
+interact with Casbrim at all for some of these candidates (`741`/`192`
+put his dialogue controller into a non-conversation state) versus simply
+seeing no new content (`706`/`705`). All four are excluded from the good
+list.
+
+Built `script/wd_extract/build_candidate_batch.py`, generating both a
+`000280_pcq_<N>.TwoWorldsIISave` (plain 000280 transform) and a
+`000280_repositioned_pcq_<N>.TwoWorldsIISave` (000282-transform-patched)
+variant for each of 8 confirmed-Casbrim-voice, real-multi-line-content
+candidates: `189`, `751`, `752`, `850`, `852`, `905`, `907`, `908` - 16
+files total, all verified round-trip (property bag re-parses with the
+expected `PCQ`, save summary still parses) and checked against the
+unchanged original/repositioned-base hashes, same discipline as every
+prior candidate this project has produced. Written to
+`files/quest_saves/pcq_candidates_batch2/`, with a `README.txt`
+explaining each candidate and the exclusion reasoning for the user's
+convenience (this one file is not gitignored the way scratch code is,
+since the whole `files/` directory itself is already gitignored as
+data).
+
+## Cataloging every named Casbrim position marker in `DLC3_PC.wd`, and nearest-place lookup
+
+**User asked for every possible Casbrim location and, for each, what
+place name it represents (or the nearest named place).** The 2026-07-11
+session had found 5 named position markers via a quick pass; this
+re-scanned exhaustively (`script/wd_extract/find_all_casbrim_positions.py`,
+then a corrected `_v2.py` after the first pass's naive "exactly 12 bytes
+before the name" heuristic produced garbage/denormalized floats for
+several real markers - fixed by scanning a wider window and scoring
+candidates by plausibility, `SEARCH_WINDOW=64`, preferring non-trivial
+magnitudes). Full pass over all ~22,318 decompressed blocks of the
+~1.8GB archive found **108 blocks containing a `casbrim`-matching named
+record**.
+
+**Confirmed real, resolvable Casbrim position markers** (name -> world
+XYZ -> nearest other named record in the same chunk, via
+`script/wd_extract/nearest_place_lookup.py`):
+
+| Marker | Position | Nearest named record | Distance | Interpretation |
+|---|---|---|---|---|
+| `casbrim mid-game` | (2202.6, 1356.7, 308.4) | `guard3` | 508.0 | the confirmed-working `quest_saves/282` position (not very informative nearest-neighbor) |
+| `casbrim here` (lowercase) | (3326.1, 3313.7, 401.6) | `office SPOM` | 25.3 | **his office** - matches his own `QC_0` line, "I'll be in my office"; this is save `000280`'s original (stuck) position |
+| `Casbrim's Spot` | (2191.4, 1349.2, 308.5) | `guard3` | 504.6 | a third distinct canonical position, purpose unclear |
+| `Casbrim here` (capitalized - a *different* marker from the lowercase one) | (2765.0, 1242.0, 0.1) / (2767.4, 1247.5, 0.1), 2 near-identical instances | `Mine C.GO` | 24.2 / 29.5 | **the Karatree Mine entrance area** |
+| `teleCasbrim` | (2097.5, 1587.7, 0.1) | `SPOM Mine` | 8.2 | **also at the mine** - a teleport point for the mine sequence |
+| `Casbrim CQ` | 5 template instances at different coordinates (e.g. (3265.3, 2296.3, 304.6)) | `Casbtrim Tele` (note the in-game typo) | 0.0 (co-located) | a reusable checkpoint/camera-quest template, not a single fixed spot |
+| `Casbrim Starts Here` | (3265.3, 2296.3, 304.6) - same as one `Casbrim CQ` instance | `Tower of Baramir SPOM` | 120.8 | near the **Tower of Baramir**, matching `DQ_20`'s own line about being seen there with Captain Shagir |
+| `tele Casbrim BeforeAD` | 3 template instances (e.g. (2841.5, 2722.0, 310.5)) | `Farfa` | 25.5 each | "BeforeAD" likely = "before the Ancient Door" event; reused 3 times, same relative layout each time |
+| `polly-casbrim QG` | (4163.9, 4117.7, 46.6) | `polly-herself QG` | 12.4 | **likely not Casbrim's own position at all** - reads as a different character's ("Polly") own quest-giver marker that happens to reference standing near Casbrim |
+
+**Not resolvable to a world position by this method** (either genuinely
+non-positional data, or a structure this technique doesn't parse):
+`CasbrimHiRep`, `CasbrimLowRep`, `CasbrimTriggered`, `PortraitUpCasbrim`,
+`ShadinarGardenCasbrim`, `STA1_Casbrim`, `DLC3_Casbrim_Ring`,
+`DLC3_CASBRIM_RING`/`_USABLE`, and the `#DLC3_CHANCELLOR_CASBRIM#`-style
+bracketed variants (their "positions" resolve to tiny local-offset-looking
+values like `(3, -3, 3)`, consistent with model/prefab definitions rather
+than world placements).
+
+**Genuinely new finding: `CasbrimHiRep` / `CasbrimLowRep`.** Casbrim
+himself has duplicate Hi-Rep/Lo-Rep entity variants in the level data,
+the same pattern found in the save-file reputation sweep for 3 unrelated
+trader NPCs (`MotharkTrader`, `OutworldTrader`, `Quartermaster`) - except
+this one is Casbrim himself. Position data for these two specifically
+didn't resolve, so this is flagged as a lead for a future session, not
+something acted on now - it's a real, previously-unknown reputation-gated
+duplicate-entity pair specific to Casbrim, on the *level-design* side
+rather than the save-file side the earlier reputation sweep covered.
+
+**Practical follow-up: mine-positioned candidates.** Since `189`/`751`/
+`752` are all part of the Karatree Mine plot, and a distinct mine-area
+position marker was just found for Casbrim specifically (separate from
+his office/mid-game spots), generated a third variant for these three
+candidates with his position patched to the mine marker's coordinates
+(`(2765.0, 1242.0, 0.1)`, rotation left as the existing repositioned
+base's) - `000280_mine_position_pcq_{189,751,752}.TwoWorldsIISave`,
+verified round-trip (PCQ, position, save summary) same as every other
+candidate. This directly tests the user's "maybe his location matters"
+hypothesis with the most targeted position/value combination the data
+supports, rather than guessing.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/find_all_casbrim_positions.py`,
+`script/wd_extract/find_all_casbrim_positions_v2.py`,
+`script/wd_extract/nearest_place_lookup.py`,
+`script/wd_extract/build_mine_position_candidates.py`.
