@@ -2697,3 +2697,45 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/find_all_casbrim_positions_v2.py`,
 `script/wd_extract/nearest_place_lookup.py`,
 `script/wd_extract/build_mine_position_candidates.py`.
+
+## Visual map of Casbrim's positions, and nearest NPCs/objects in the live save
+
+**User asked to see the mine position on some sort of map, and for the
+nearest other places or NPCs in save `000280` itself** (the prior
+nearest-place lookup only used other named *level-data* markers, not
+actual placed entities from a real save).
+
+Wrote `script/wd_extract/find_nearby_npcs.py`: scans save `000280`'s
+single zlib block for every `DLC3_`-prefixed named record with a
+plausible 20-float transform right after it (same shape confirmed for
+Casbrim - position at indices 14/15/16), collecting `(name, position)`
+for every entity that parses cleanly. Found **185 such entities**.
+Computed nearest neighbors to two targets:
+
+- **Near the mine position** `(2765.0, 1242.0, 0.1)`: nothing very
+  close - nearest are two `DLC3_ELF_CHEST_01` loot containers (~430-500
+  units away), a `DLC3_Shadinar_Guard_RP_6` guard (~634 units), then
+  several `DLC3_ELF_NOBLE_*` entities (~690-980 units). The mine
+  entrance area itself isn't densely populated with static entities in
+  this save's snapshot - consistent with the actual mine interior being
+  a separate zone/instance not reflected in the overworld save data.
+- **Near Casbrim's own current (office) position** `(3326.1, 3313.7,
+  401.6)`: his own entity resolves at `(3326.0, 3313.0, 401.0)`, distance
+  **0.9** - a strong sanity check that the WD-level-data marker and the
+  save's live position agree (same coordinate system, confirming the
+  earlier position-patch work was sound). Nearby: painting/easel props
+  and a cosmetics box (~113-119 units, consistent with a personal
+  office), elf storage chests, and - notably - **`DLC3_QUEEN_ARMED`**
+  at 172.5 units and `DLC3_QUEEN_UNARMED` at 448.5 units. Queen Arbellen
+  is genuinely nearby, consistent with a shared palace wing.
+
+**Built a visual reference** (published as an Artifact, not committed to
+the repo - it's a one-off visualization, not project code): a top-down
+coordinate-plot "survey map" of all 14 Casbrim-related markers (color-
+coded: his own confirmed positions, reusable templates, and the likely-
+unrelated `polly-casbrim QG`) plus the nearest save-000280 entities for
+both the mine and office targets, with hover tooltips and full data
+tables for exact figures. Confirms visually that the mine-area markers
+(`Casbrim here` capitalized, `teleCasbrim`) and the office/mid-game
+markers sit in clearly separate parts of the world, well apart from each
+other and from `Casbrim's Spot`.
