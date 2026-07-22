@@ -2739,3 +2739,39 @@ tables for exact figures. Confirms visually that the mine-area markers
 (`Casbrim here` capitalized, `teleCasbrim`) and the office/mid-game
 markers sit in clearly separate parts of the world, well apart from each
 other and from `Casbrim's Spot`.
+
+## A distinct hypothesis: position-only trigger, PCQ left untouched
+
+**User asked whether just moving Casbrim to the mine location - without
+touching `PCQ` at all - might itself fire whatever trigger is needed**,
+a genuinely different mechanism than anything tested so far (every prior
+experiment either changed `PCQ` alone or changed both `PCQ` and
+position together; nothing isolated "real position, real/unedited
+`PCQ`" as its own variable).
+
+Generated `000280_mine_position_only_pcq_unchanged.TwoWorldsIISave`
+(`script/wd_extract/patch_mine_position_only.py`): starts from the
+**plain** `000280` save (not the repositioned-to-282 base, to keep this
+a single isolated variable), patches only Casbrim's XYZ position
+(transform indices 14/15/16) to the mine-area coordinates
+`(2765.0, 1242.0, 0.1)`, and leaves `PCQ` at its real, current, unedited
+value of `853`. Verified round-trip (position patched correctly, `PCQ`
+confirmed unchanged, save summary still parses), original hash
+unchanged - same discipline as every prior candidate.
+
+**Honestly flagged the real uncertainty rather than overselling it**:
+trigger volumes in most games (plausibly this one too) fire based on
+the *player* entering a zone, not on an NPC's stored position - in which
+case this experiment does nothing, since nothing is actually walking
+into anything on its own; the game would just render Casbrim standing
+at the mine, still saying his `853` line. It only has a chance of
+mattering if the specific trigger checks "is Casbrim's own entity
+present here" as its firing condition, independent of the player's
+location - which can't be confirmed without either an in-game test or
+dynamic analysis. Cheap and safe either way, and a clean negative result
+(no change) would itself be useful information, narrowing the mechanism
+away from "his own presence at the mine" and back toward a player-
+location or purely script-internal condition.
+
+Added to `files/quest_saves/pcq_candidates_batch2/`, documented in that
+folder's `README.txt` alongside the existing candidates.
