@@ -2473,3 +2473,127 @@ consistently hit a wall trying to decode.
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/survey_global_flags.py`.
+
+## User confirms reputation is not the blocker; the full Casbrim dialogue map, a cross-NPC link, and a new PCQ=907 candidate
+
+**Reputation ruled out directly by the user**: the in-game elf-reputation
+milestone was actually reached (an in-game message acknowledged it), yet
+`DQ_853` still never advances. This strengthens the earlier conclusion:
+the wait-gate is not reputation-, location-, or save-flag-based at all -
+whatever blocks it lives purely in `.eco` script-internal logic.
+
+### The "force `DLC_3.eco`'s state to `Initialize`" idea - checked, not recommended
+
+User asked whether the `Scripts\...\DLC_3.eco: "Nothing"` property-bag
+entry (found during the reputation sweep) could be forced to
+`"Initialize"` to re-trigger setup logic. Traced its exact location: it
+sits inside a long, strictly sequential list of *every* mission-
+controller script loaded for the whole DLC3 zone -
+`DLC_3.eco`, `TwoWorlds2Trainers.eco`, `TwoWorldsHeroControl.eco`,
+`TwoWorldsWeather.eco`, `TwoWorlds2Containers.eco`, `TwoWorlds2Shops.eco`,
+`TwoWorlds2Music.eco`, `TwoWorldsSounds.eco`,
+`TwoWorlds2DefaultEvents.eco`, `TwoWorldsQuests.eco` - each appearing
+exactly once, value **always `"Nothing"`, zero exceptions**, anywhere in
+this save. **This is a whole-zone manifest (weather/shops/sounds/etc. for
+all of DLC3), not anything Casbrim-specific**, and no real instance of
+any of these *named* mission scripts (as opposed to the generic
+per-subzone `EmptyMission.eco` filler, which does show both values) has
+ever been observed in the `"Initialize"` state in any save examined -
+meaning we have no evidence this is even a stable/valid state to force
+one of these into, versus a transient value the game only holds
+momentarily at level-load before resetting to `"Nothing"`. **Not
+recommended**: low specificity (would attempt to re-run whole-zone init,
+not a targeted Casbrim trigger) and unverified whether it's even a safe
+state to persist.
+
+### Building the full Casbrim dialogue map, and following the DQ_752 thread
+
+Extracted complete (not keyword-filtered) `DQ_<N>_*` trees for every
+remaining candidate number from the earlier 59-number list plus a few
+neighbors. Two real, useful results:
+
+**`DQ_752` is definitively Casbrim's own voice, and directly continues
+both his stuck threads at once.** Full exchange: player finds Casbrim
+recovering ("Chancellor... still here?"); Casbrim says he's nearly ready
+to head back to the Palace, and has been thinking over "that
+conversation we once had" - the player clarifies "the one after finding
+Finglor," Casbrim corrects "after *killing* Finglor, to be precise... I
+was considering another mission then, but had doubts" - explicitly the
+same postponed-mission thread from `DQ_3483`/`DQ_853`. He then says
+"now I'm starting to think you might be up to it... doesn't mean
+'no'... once you've dealt with whatever you were looking for in that
+mine, come see me at the Palace." **`DQ_752`'s own closing line (`QC_0`)
+explicitly merges both threads**: *"Thanks again for saving me from that
+bear [`DQ_189`'s beast-attack scene]... and about that other task [the
+`DQ_853`/`3483` postponed mission]: come see me soon."* This makes
+`DQ_752` the clear intended next checkpoint after `853` - reached once
+the `DQ_189` mine content has actually played out in a real game
+session (not just forced via save edit).
+
+**`DQ_907`/`DQ_908` (near-duplicate variants, likely a
+gender/localization branch) are the next step after that**: Casbrim,
+now impressed, says *"remember that job we talked about, when you
+helped with Finglor? I'm considering asking you for help again, if
+you're interested"* - the player's open-ended reply ("depends on the
+task") is where the captured text currently ends; the actual mission
+offer that would follow hasn't been found under any tested number yet.
+
+**Real structural difference worth exploiting**: `DQ_752`, `DQ_907`, and
+`DQ_908`, like the live `DQ_853`, have **no `M.I1`/`M.I2` topic menu at
+all** - just a single linear `FT_0 -> TAKE_* -> QC_0` exchange. `DQ_853`
+is known to always play its full linear exchange on every real visit
+(the user has re-triggered it many times with identical results) -
+consistent with menu-less states simply not having a first-time-vs-
+repeat distinction to gate on. `DQ_189`, by contrast, needed a menu
+system (`M.I1/I2/BYE`) to pick between first-time/repeat sub-content,
+and forcing its `PCQ` only ever reached the menu shell, never the real
+`FT_*`/`TAKE_*` cutscene. **This suggests menu-less states like `752`/
+`907`/`908` are meaningfully better save-edit candidates than `189` was**
+- there's no separate "first visit" state for the game to fail to enter.
+
+**Genuinely new cross-NPC finding**: `DQ_751` (also confirmed Casbrim's
+own voice - references giving "the ring that opens the Karatree Mine,"
+i.e. `DQ_189`'s own ring) and `DQ_748`/`749` (confirmed **Abraham Van's**
+own voice - a human trader named "Abe," discussing finalizing a
+Vanderbilt-family mining consortium deal explicitly negotiated *with
+Casbrim*, over the same Karatree crystal mine) show that **Casbrim's and
+Abraham's independently-bugged quests are entangled in the same
+underlying content** (the Karatree Mine/crystal-trade plot), not two
+coincidentally-similar bugs. This is consistent with, and strengthens,
+the project's existing finding that both are bugged in the same category
+while every other NPC's questline completed normally.
+
+**Practical outcome**: generated a new candidate save,
+`files/quest_saves/000280_casbrim_repositioned_pcq_907.TwoWorldsIISave`
+(same-length `853`->`907` substitution on the position-fixed base,
+verified round-trip and against the unchanged original hash, same
+method as every prior candidate). **A `PCQ=752` candidate already
+existed from the earlier memory-cluster batch
+(`000280_casbrim_repositioned_pcq_752.TwoWorldsIISave`) but had not yet
+been tested in-game** - given the structural reasoning above, this is
+now the single most promising untested candidate available.
+
+### Direct answers to the user's "can we just fix it via save edit" questions
+
+- **"Can we flag 'Gods and Demons' as completed?"** No usable target
+  found. There is no completion flag anywhere in the save (exhaustively
+  checked this session and in prior sessions), and no `DQ_<N>` node in
+  Casbrim's own confirmed chain (`20`/`3483`/`853`/`189`/`752`/`907`/
+  `908`) contains anything that reads as the quest's own resolution -
+  the chain's known endpoint is still open-ended ("depends on the task"
+  at `907`/`908`). There's nothing to mark as done because nothing in
+  the save file tracks "done" in the first place.
+- **"Can we skip a portion of the bugged quest via save edit?"**
+  Partially, with a real caveat now backed by structural evidence: `PCQ`
+  reliably selects *which* dialogue group is active, but content gated
+  behind a first-time-only cutscene (needs the game's own live
+  transition, not just the stored value) only shows its menu shell when
+  forced - demonstrated directly with `189`. Menu-less states (`752`,
+  `907`, `908`, matching `853`'s own always-full-replay behavior) are
+  the best current bet for actually rendering complete content from a
+  forced value, but this is still a reasoned guess, not a proven
+  mechanism, until the user tests it.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/extract_full_dq_trees.py`,
+`script/wd_extract/patch_casbrim_pcq_907.py`.
