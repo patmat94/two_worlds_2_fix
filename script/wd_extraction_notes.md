@@ -2914,3 +2914,154 @@ earlier this session already limits what moving his position can do).
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/find_menu_candidates.py`,
 `script/wd_extract/patch_pcq_20_validation.py`.
+
+## Pushing harder per the user's request: found the full quest-log stage roadmap, still no new PCQ lever
+
+**User pushed back that there must be more candidates - Casbrim has 3
+quests for "Expert Side Adventure," and asked to check other flags that
+change during quest progression on NPCs other than Casbrim/Abraham
+(everyone else's quest progress is supposedly tracked correctly).**
+
+**Checked whether `DLC3_PC.wd`'s two large "multi-language bundle"
+chunks (offsets `1039431680`/`1041543168`, found back on 2026-07-11)
+hold any Casbrim content beyond the one block already mined.** Negative
+- both chunks have the exact same 269 distinct `DQ_<N>` numbers and the
+same 6 Casbrim-named hits as the `DLC3_PC_POL.wd` block already
+exhausted. These are just other-language (or duplicate) copies of the
+identical catalog, not additional content.
+
+**Real new finding: searched for `Q_<id>`/`GROUP_<id>` records (quest-
+log stage titles, distinct from `DQ_<id>` dialogue-line records) and
+found the full "Gods and Demons" quest-stage roadmap.** `GROUP_2`
+("Ekspercka przygoda poboczna: Bogowie i demony") is followed by a real
+sequence of quest-log stage titles, not just the single `Q_45` found
+back on 2026-07-11:
+
+- `Q_45`: "Kolejna zagadka?" ("Another riddle?") - an early stage
+- **`Q_848`: "Gotowy do zadania... czy nie?" ("Ready for the task...
+  or not?") - this is almost certainly the exact quest-log title for
+  the state the user is stuck at right now**, matching `DQ_853`'s
+  content precisely (Casbrim considering whether to give the next
+  task)
+- `Q_919`-`Q_923`: temple-of-Maliel stage titles (secret doors, corrupt
+  priests) - these directly match the `ShadinarMaliel`/`ShadinarYatholen`/
+  `ShadinarAziraal` garden-marker names found in the `CasbrimTriggered`
+  raw dump earlier this session, confirming that record really is
+  tied to this quest's later stages
+- `Q_943`/`964`/`974`-`976`: more crypt stages (Aziraal, Yatholen)
+- `Q_967`/`968`/`970`/`971`: two "Confessor" NPCs found and then killed
+- `Q_969`/`972`/`973`/`1281`: "Gates of Dawn," "Inner Sanctuary," "The
+  Hierarch," "The Hierarch lies dead" - the Silver Dawn cult's actual
+  defeat, matching `DQ_850`/`852`/`905`'s "hero of Shadinar" content
+- `Q_1337`: "Nigdy więcej Świtu!" ("Never again Dawn!") - the quest's
+  own completion title
+
+This is a genuinely richer picture than anything found before - a real,
+concrete confirmation that "Gods and Demons" is a long multi-stage
+chain with the exact expected shape, and that `Q_848` in particular
+describes the user's current moment almost exactly.
+
+**But: searched the save file for literal `Q_848`/`Q_45`/`GROUP_2`
+references directly - none exist** (the only raw `"848"` hit is a
+coincidental substring inside an unrelated entity name, `NPC_33848`).
+**This confirms, rather than overturns, the earlier 2026-07-11 dead
+end**: quest-log stage titles are computed at runtime from `PCQ` (very
+likely via a lookup table inside the `.eco` script, mapping PCQ ranges
+to `Q_<id>` titles) - they are not stored as a separate trackable value
+anywhere in the save. There is no new lever here, just much better
+narrative confirmation that the investigation has been looking in the
+right place.
+
+**Second part of the user's ask: trace a confirmed-working NPC's full
+property bag (not just PCQ) across every available save, to catch a
+flag that might change alongside a real transition.** Tried
+`DLC3_ROGDOR` first (`script/wd_extract/trace_full_bag_changes.py`) -
+found a data-availability problem, itself an interesting result: his
+bag is **only observable from save `000218` onward, and already sitting
+at his final value (`802`) the very first time he's observable at all**
+- no transition is captured in the data we have, because by the time
+his data exists in any save he's already done. This is consistent with
+the zone-bound pattern found earlier for Casbrim extending more
+generally: an NPC's live property bag may simply not exist in saves
+made before the player's character has been in the relevant zone.
+Broadened the check to all 6 confirmed-completed NPCs
+(`ROGDOR`/`BERNARD_VAN`/`MASTER_LAGINU`/`MENDEL`/`LARLANDOR_UNARMED`/
+`CAPTAIN_SHAGIR`) to look for at least one with an actually-captured
+transition - running as of this note, result pending.
+
+## Result of the 6-NPC full-bag trace, and a genuinely new lever found: `SOC` on the quest file itself
+
+**The 6-NPC trace completed: a clean, thorough negative on "does
+another property change alongside PCQ."** Across the full 286-save
+history, every one of the 6 confirmed-completed NPCs shows real,
+multi-step PCQ progressions (e.g. `DLC3_CAPTAIN_SHAGIR`:
+`166→21→25→267→...→756→191→2214`) - but the **only** keys that ever
+change alongside `PCQ` are `PQTIMED` (appearing/disappearing) and
+incidental fields (`LSU`, `eStImmortalUnit`) that don't track quest
+logic (`LSU` looks like a timestamp on Bernard Van specifically;
+`eStImmortalUnit` is a combat-invincibility flag on Shagir). No new key
+outside the already-known 72 ever appears. This directly and
+thoroughly answers the user's question: **there is no companion flag
+on a working NPC's own property bag - `PCQ` really is the only lever
+at that level, for every NPC checked.**
+
+**But a real, new, independent lever was found - not on any NPC, but on
+the quest FILE itself.** While searching for a "quest marker/compass"
+mechanism (prompted by the user reporting the in-game map currently
+shows a marker for this quest near Casbrim's repositioned location),
+found a property key called `SOC` - present in the original 72-key
+catalog from the reputation sweep but never individually investigated
+- attached to a literal quest-file record: `Quests\TWII_DLC_SP3.dat`/
+`.lan` (both reference the identical underlying bag, confirmed at the
+same absolute offset). "SP3" = DLC3 side-plot 3; given this is the
+*only* DLC3 quest file present in save `000280`, and its property bag
+also carries `Island: 30` (matching the DLC3 island), this is almost
+certainly "Gods and Demons"'s own quest-file, separate from Casbrim's
+per-NPC dialogue tracking entirely.
+
+**Traced `SOC` across every available save** (`script/wd_extract/catalog_all_quest_files_all_saves.py`):
+the quest file itself doesn't exist before save `000181`; `SOC` isn't
+present in its bag yet at `000181`; **`SOC` first turns `1` by save
+`000190`** - right around when Casbrim's own dialogue history first
+begins (his `20→3483→853` cycle starts shortly after `000185` per
+earlier sessions) - and then **stays at exactly `1` through save
+`000280` and even the later outlier saves (`020001`/`090000`/`090001`)
+- never advancing once, the whole observable history.** This exactly
+mirrors his own stuck `PCQ`, but on the quest file, independent of him.
+
+Checked the other two DLC3 side-quest files (`TWII_DLC_SP1`, `TWII_DLC_SP2`)
+for comparison - neither ever carries an `SOC` key at all (only
+`_EMPTY_HANDS_IN_CUTSCENE_`/`_ENABLEGHOSTS_`/`Island`/
+`_OVERRIDE_WEATHERTYPE_`), so `SOC` is specific to SP3, not a universal
+per-quest-file property - can't use them to confirm what a "completed"
+SOC value would look like. The base-game's own `TwoWorldsII.dat` quest
+file only appears in save `000000` and is gone by later saves, so
+there's no other observable comparison point either. This means we
+cannot *prove* `SOC=2` (or any other value) is the correct "next"
+stage - it might just be a simple "active" flag that stays `1` for the
+whole quest's duration by design - but it's a real, previously-untested,
+independent target.
+
+**Generated a new candidate isolating this single variable**:
+`files/quest_saves/pcq_candidates_batch2/000280_soc_advance_pcq_unchanged.TwoWorldsIISave`
+(`script/wd_extract/patch_soc_advance.py`) - `SOC` changed `1`→`2` on
+both the `.lan` and `.dat` quest-file bag references, Casbrim's own
+`PCQ` explicitly confirmed still `853` (untouched), verified round-trip
+and against the unchanged original hash. Documented honestly in
+`README.txt` that `2` is a natural guess, not a confirmed correct value.
+
+Also directly answered the user's specific question about `Q_45`/`Q_848`:
+searched for literal `GROUP_2`/`Q_45`/`Q_848` byte-string references
+anywhere in the save - none exist (the only raw "848" hit is
+coincidental, inside an unrelated entity name `NPC_33848`). This
+confirms the quest-log *title* the user sees (whichever `Q_<id>` text
+is currently displayed) is computed at runtime from `PCQ` (or now,
+possibly, from `SOC`) rather than stored as its own separate value -
+`SOC` is the closest thing found to an actual stored "which stage"
+tracker, and it's the one now being tested.
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/trace_full_bag_changes.py`,
+`script/wd_extract/catalog_quest_files.py`,
+`script/wd_extract/catalog_all_quest_files_all_saves.py`,
+`script/wd_extract/patch_soc_advance.py`.
