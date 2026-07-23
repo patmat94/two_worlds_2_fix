@@ -3141,7 +3141,71 @@ the wrong DLC ("Call of the Tenebrae"; the correct one is "Shattered
 Embrace") and surfaced an unrelated but superficially similar-sounding
 Vanderbilt/miners/bandit-camp quest bug from that wrong DLC - **user
 caught this and correctly discarded it**. Re-dispatched with the
-correct DLC name; result pending as of this note. Overall external
-finding so far: no evidence this specific quest is a previously
-documented/reported bug anywhere - likely undiscovered rather than
-known-with-a-fix.
+correct DLC name.
+
+## External research resolved: confirmed genuine content, no documented fix, latest patch already installed
+
+Re-dispatched research correctly targeting Shattered Embrace confirmed
+every named entity we've extracted (Casbrim, Shadinar, Karatree Mine/
+Reach, Teramon, Abraham/Bernard Vanderbilt, "Gods and Demons") as
+genuine Shattered Embrace content - strong external validation that
+this whole investigation has been pointed at the right place the whole
+time. **Found real external evidence this exact quest has a documented
+history of engine bugs**: the full patch-note history (only 3 patches
+ever released for Shattered Embrace - an unnumbered hotfix, v2.07.2,
+and v2.07.3, the latest, Feb 2020) names "Gods and Demons" directly
+twice - v2.07.2 fixed "a bug while entering the Crypt below the Temple
+of Yatholen ('Gods and Demons')"; v2.07.3 fixed corrupted priest-NPC
+robes in the same quest, and separately adjusted "body animations,
+facial expressions and custom cameras for certain NPC dialogues in
+Shadinar (Act II)". **No patch note anywhere mentions Casbrim,
+Karatree, Maliel, or Aziraal by name, and none describes an NPC
+repeating dialogue or a quest failing to progress** - the "stuck at
+Casbrim" symptom specifically is not documented at any patch level.
+**User confirmed their own install is already on v2.07.3 (current)** -
+ruling out "update the game" as a fix, and confirming this bug is
+genuinely undocumented upstream. User's explicit direction after this:
+stop web research, refocus entirely on file exploration.
+
+## Pushing the `.eco` bytecode angle with the new, specific anchors (`SOC`, `Wolnoport`) - clean negative
+
+Extracted all 21 real compiled `.eco` scripts fresh
+(`extract_eco_files_from_wd_archive`) and searched every one for the
+newly-found specific terms: `SOC`, `Wolnoport`, `Freeport`,
+`TWII_DLC_SP3`, `DLC_SP3`. Only one coincidental hit: `SOC` appears
+twice in "Sounds Script," directly followed by `AMB_MARK_RIVER` -
+clearly an ambient-sound category tag, unrelated to the quest-file
+property of the same three letters. **None of these terms appear as a
+genuine string literal in any of the 21 scripts.**
+
+Broadened further: searched all 21 scripts for `CASBRIM`, `KARATREE`,
+`YATHOLEN`, `MALIEL`, `AZIRAAL`, `TERAMON`, `GODS`, `DEMONS`,
+`SHADINAR`, `GORANA`, `FINGLOR` - **zero hits, in any script.** This
+confirms (and extends, with fresh specific terms, a finding this
+project already suspected generically) that entity/quest names are
+never embedded as readable strings in the compiled bytecode at all -
+everything is referenced by opaque numeric ID, with human-readable
+names living only in the separate localization archive. Whatever logic
+actually reads `SOC`/checks the `Wolnoport` condition is not written in
+any of these 21 moddable script files - it is almost certainly compiled
+directly into the game's executable (not present anywhere in this
+project's available files - `files/Two Worlds 2/` contains only the
+three `.wd` data archives and saves, no executable).
+
+Also double-checked the immediate raw-byte vicinity of the `SP3` quest
+file's own bag (`WIND3`/`RAIN` ambient markers, an `EmptyMission.eco`
+"Nothing"-state reference, then the 3-property bag itself) - a small,
+fully bounded structure with nothing else nearby to find.
+
+**Honest assessment at this point**: every practical static-analysis
+avenue available in this project's data has now been tried and
+exhausted for this specific bug - `PCQ` value/menu-mechanism testing,
+position/zone patching, the `SOC` quest-file flag, all 72 property-bag
+keys across all NPCs and quest files, every Casbrim-adjacent scene
+entity, all 21 compiled scripts' string tables, and the external patch/
+bug-report history. Further progress genuinely requires either dynamic
+analysis (confirmed available to the user, planned for later) or
+disassembling the actual opcode semantics of the `.eco` VM - a
+fundamentally larger effort this project already attempted extensively
+and hit a wall on months ago, exactly as concluded several times
+earlier in this investigation.
