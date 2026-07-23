@@ -3111,3 +3111,37 @@ way, and not this session's focus.)
 
 Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/find_all_quest_files_soc.py`.
+
+## SOC=2 confirmed to do nothing; combined SOC+reposition candidate; deep entity re-scan; external research
+
+**User tested `SOC=2` (office position, PCQ unchanged) in-game - no
+change at all.** Generated the companion variant,
+`files/quest_saves/pcq_candidates_batch2/000280_soc_advance_repositioned_pcq_unchanged.TwoWorldsIISave`
+(`script/wd_extract/patch_soc_plus_repositioned.py`) - `SOC=2` combined
+with Casbrim repositioned to the confirmed 000282 "mid-game" transform,
+`PCQ` still confirmed `853` (untouched). Verified the plain and
+repositioned source files are byte-identical up through the quest-file
+region (287700 bytes) before patching, so reusing the same absolute bag
+offset across both bases is safe. Round-tripped and hash-checked same
+as every prior candidate.
+
+**Deep re-scan of every Casbrim-related scene entity in the save**
+(`script/wd_extract/deep_scan_casbrim_entities.py`), using a much wider
+window and more lenient prop-count range than any earlier pass:
+`CasbrimTriggered`, `PortraitUpCasbrim`, `ShadinarGardenCasbrim`,
+`DLC3_Casbrim_Ring`, `CasbrimHiRep`/`LowRep`, `STA1_Casbrim` - **none of
+them carry a property bag in the recognized key/value format, even
+with a wide window.** These are confirmed structural/scene records
+(trigger-volume linkage lists, item-placement data) with no toggleable
+flag to find, not a case of the earlier scan missing something.
+
+**Dispatched external research** (asked "is this a known/documented
+bug anywhere - Steam, GOG, fan wikis") - first pass mistakenly targeted
+the wrong DLC ("Call of the Tenebrae"; the correct one is "Shattered
+Embrace") and surfaced an unrelated but superficially similar-sounding
+Vanderbilt/miners/bandit-camp quest bug from that wrong DLC - **user
+caught this and correctly discarded it**. Re-dispatched with the
+correct DLC name; result pending as of this note. Overall external
+finding so far: no evidence this specific quest is a previously
+documented/reported bug anywhere - likely undiscovered rather than
+known-with-a-fix.
