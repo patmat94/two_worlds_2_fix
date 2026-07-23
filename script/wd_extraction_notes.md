@@ -2847,3 +2847,70 @@ result - no new candidate emerges from this specific angle.
 Scratch analysis for this pass (gitignored, not committed) - direct
 `python -c` invocations rather than saved scripts, reusing established
 `wd_format` primitives.
+
+## Real mechanism found: only menu-having states show anything from a forced PCQ value
+
+**User confirmed the office location itself was never buggy** - found
+Casbrim one floor up from where they'd been standing, exactly matching
+the map's callout. **But a new, more specific problem: he doesn't react
+to being talked to at all with several of the batch2 candidates.**
+Tested every batch2 PCQ value at his real office position: `189` still
+works (opens the topic menu, as before). `751`/`752`/`850`/`852`/`905`/
+`907`/`908` open **no dialogue whatsoever** - just a slight idle
+movement on interaction, nothing else. The `_repositioned_` (282/mid-
+game position) variants of the same values don't even produce that
+slight movement - completely still.
+
+**This is a real, testing-confirmed mechanism, and it reverses this
+session's earlier guess.** Earlier reasoning assumed menu-less states
+(no `M.I1`/`M.I2`) would be *more* likely to render fully from a forced
+value, since `DQ_853` (menu-less, and the game's own real, live state)
+always plays its full exchange for the user normally. The actual test
+results show the opposite: **`DQ_189` (which has a real topic menu) is
+the only batch2 candidate that opens anything at all; every menu-less
+candidate opens nothing.** Best-fitting explanation: the normal "walk
+up and talk" interaction can only ever open a group's menu - it has no
+code path to directly start a linear `FT`/`TAKE` chain from a cold,
+force-set value with no accompanying "just transitioned" flag. Without
+a menu to fall back on, there's nothing for that interaction to show at
+all. `DQ_853` isn't an exception to this - it's simply never been
+force-set; it's the game's own organically-reached live state, which
+doesn't need this same fallback path.
+
+**Searched exhaustively for any other Casbrim state with a menu -
+genuine, thorough negative.** Checked every remaining number in the
+59-number keyword-matched list (`script/wd_extract/find_menu_candidates.py`)
+for `M.I1`/`M.I2`/`M.I3`/`M.BYE` nodes: about a dozen have one, but
+every single one is confirmed a *different* character's own dialogue
+(Bernard Vanderbilt at `DQ_181`, Captain Shagir-adjacent at `DQ_191`,
+Teramon at `DQ_463`/`469`, Perakir's mother at `DQ_255`, and others) who
+merely discusses or is asked about Casbrim - not his own voice. Also
+re-confirmed the entire ~1.3MB `DLC3_PC_POL.wd` archive has only **one**
+block that mentions "Casbrim" at all (the same block used this whole
+session) - there is no second block hiding more of his content anywhere
+in this file. **Within the data available, `DQ_20` and `DQ_189` are the
+only two Casbrim states with a menu, full stop - no further untested
+"will behave like 189" candidate exists.**
+
+**Generated one new diagnostic file** (not a progression attempt):
+`files/quest_saves/pcq_candidates_batch2/000280_pcq_020.TwoWorldsIISave`
+- `PCQ` set to `20`, his very first historical state, also confirmed to
+have a real menu. Built as a genuine variable-length value change (not
+a same-length digit swap like every prior candidate): the 4-byte length
+prefix changes from 3 to 2 and the string shrinks from `"853"` to
+`"20"` (no leading zero, to avoid any risk of an octal-style
+misparse), verified round-trip same as always. If this also opens some
+kind of dialogue, that's a second confirming data point for the "needs
+a menu" theory; if it shows nothing despite having a menu, the theory
+is wrong and something else is going on - equally useful to know either
+way.
+
+Rewrote `pcq_candidates_batch2/README.txt` in full to reflect the
+confirmed test results, deprioritizing the now-known-dead menu-less
+candidates and the mine-position files (doubly moot: 751/752 are
+dialogue-dead regardless of position, and the zone-bound finding from
+earlier this session already limits what moving his position can do).
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/find_menu_candidates.py`,
+`script/wd_extract/patch_pcq_20_validation.py`.
