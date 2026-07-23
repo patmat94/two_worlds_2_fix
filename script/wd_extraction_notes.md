@@ -2775,3 +2775,75 @@ location or purely script-internal condition.
 
 Added to `files/quest_saves/pcq_candidates_batch2/`, documented in that
 folder's `README.txt` alongside the existing candidates.
+
+## Breakthrough: Casbrim's entity is zone-bound - explains every "can't find/speak to him" report
+
+**User tested every candidate saved so far and reported total failure**:
+couldn't find Casbrim anywhere near the mine (any PCQ, any position
+variant), nothing triggered near the mine, and - critically - couldn't
+find him at his own office location either, in any of these saves.
+Made 3 new real saves themselves (`files/location_saves/000286-288`,
+with `description.txt` noting where they stood: 286 = mine location
+(Równina Karatree / Karatree Plain), 287 = office/palace wing near the
+queen, 288 = office guess, inside a building, uncertain).
+
+Analyzed all three directly. Key method: found the player character's
+own entity, `HERO_WARRIOR_DLC3`, follows the **exact same
+name+transform+bag layout** as Casbrim (property bag at a 105-byte gap
+after the name, matching Casbrim's own structure) - so the same
+transform-reading technique applies to the player, not just NPCs.
+
+Results:
+
+| Save | `parse_save_summary` location | Player position | Casbrim's own entity |
+|---|---|---|---|
+| 286 (mine) | Równina Karatree | (2100.8, 1598.5, ~0.0) | **no valid record found** - both `DLC3_CHANCELLOR_CASBRIM` occurrences resolve to denormalized/garbage floats, no property bag at all |
+| 287 (office, palace wing) | Shadinar - Pałac Królewski | (3309.0, 2272.8, 304.7) | **found, with a real bag** (`PCQ=999` - an old candidate from months ago, not from batch2) at position **(3326.0, 3313.0, 401.0)** - exactly matching the confirmed "office" marker |
+| 288 (office guess, building) | Północno-wschodnie Podmiasto (Undercity - user's own uncertainty confirmed correct) | (4669.4, 3958.3, ~4.1) | **no valid record found**, same as 286 |
+
+**This is the real explanation, not a failure of the patches
+themselves**: save `000280` (and therefore every candidate built from
+it) is itself set in `Shadinar - Pałac Królewski` -
+`parse_save_summary` on the plain original confirms this exactly.
+Casbrim's entity only carries a real, live property bag and transform
+**when the save's current zone matches the zone his entity data belongs
+to**. The other two `DLC3_CHANCELLOR_CASBRIM` occurrences seen in every
+save (280 included, confirmed earlier this session) are inert
+template/definition stubs with meaningless float data, not a second
+live instance.
+
+**Practical consequence**: patching Casbrim's stored XYZ only moves him
+*within* the zone his entity is loaded in (Shadinar/Palace, since that's
+what save 280 is). It cannot make him appear in a **different** zone
+(like the Równina Karatree overworld region) no matter what coordinate
+value is written, because that other zone's own data simply doesn't
+carry a live instance of him at all - this has nothing to do with which
+`PCQ` value was chosen. This fully explains "nothing happens near the
+mine, in any save" and "I can't find him anywhere."
+
+**The office result (287) is actually good news, correctly read**: his
+entity is present and exactly where expected. The player was ~1045
+units away (mostly a ~1040-unit gap in the Y coordinate) - not "he's
+missing," but "wrong wing of a large palace complex." `Casbrim CQ`/
+`Casbrim here`/`Casbrim's Spot`/`Mine C.GO` were all found in the same
+data block as this office marker, at broadly comparable coordinate
+magnitudes (hundreds to low thousands) - strongly suggesting the "mine"
+location is **within the same Shadinar/Palace zone/level file**, not
+the same place as the separate overworld "Równina Karatree" the user
+associated with the Karatree Mine plot by name. **Corrected guidance for
+re-testing**: load a mine-position candidate and, without leaving
+Shadinar/traveling to Karatree Plain, walk toward `(2765, 1242, ~0)`
+relative to where the save drops the player - that is the actually
+correct test, not visiting the separate overworld region.
+
+**Also checked the user's "give Casbrim the ring" idea for a new PCQ
+candidate** - searched all `DQ_<N>` text for ring (`pierścień`)
+mentions. Found nothing new: the only ring-related nodes are `DQ_189`
+(Casbrim gives the ring to the player) and `DQ_751` (Casbrim references
+having given it) - both already known. No node describes the player
+returning/using the ring as a distinct completion step. Honest negative
+result - no new candidate emerges from this specific angle.
+
+Scratch analysis for this pass (gitignored, not committed) - direct
+`python -c` invocations rather than saved scripts, reusing established
+`wd_format` primitives.
