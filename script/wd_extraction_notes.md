@@ -3065,3 +3065,49 @@ Scratch scripts for this pass (gitignored, not committed):
 `script/wd_extract/catalog_quest_files.py`,
 `script/wd_extract/catalog_all_quest_files_all_saves.py`,
 `script/wd_extract/patch_soc_advance.py`.
+
+## Is `SOC` tracked anywhere else? Checked every quest file that exists - clean answer: no
+
+**User asked directly whether `SOC` is a tracked/changing value in any
+OTHER quest file, to find a working comparison example.** Enumerated
+every distinct `Quests\<name>.dat` filename across all 286 saves
+(`script/wd_extract/find_all_quest_files_soc.py`) - only **4 exist in
+the entire observed history**:
+
+- `Quests\TwoWorldsII.dat` (the base-game quest file) - carries
+  `LocMask`/`Island`, **never `SOC`**; stops appearing entirely after
+  save ~`000067` (superseded once DLC quest files take over, or simply
+  no longer serialized once irrelevant)
+- `Quests\TWII_DLC_SP1.dat` - appears exactly once, at save `000070`,
+  with no real property data at all (`None`) - never seen again in any
+  later save
+- `Quests\TWII_DLC_SP2.dat` - real tracked data from save `000109`
+  through `000159` (`_EMPTY_HANDS_IN_CUTSCENE_`, `Island: 20`,
+  `_ENABLEGHOSTS_`, `_OVERRIDE_WEATHERTYPE_`) - **never carries `SOC`
+  at any point** - then its bag disappears entirely after save
+  `000161` and never returns through save `000280`
+- `Quests\TWII_DLC_SP3.dat` (Gods and Demons) - the **only** one of the
+  four that ever carries `SOC`, confirmed always exactly `1` from its
+  first appearance (`000190`) through the last available save
+  (`000280`) and the later outlier saves
+
+**Clean, definitive answer: `SOC` is not a shared/universal quest-file
+mechanism - it is specific to `SP3` alone.** There is no other quest
+file anywhere in the available save history that ever carries this key,
+so there is no working example showing what a non-stuck `SOC`
+progression, or a "completed" `SOC` value, would actually look like.
+This doesn't change the `000280_soc_advance_pcq_unchanged.TwoWorldsIISave`
+candidate already generated (`SOC` 1→2) but does remove any hope of
+empirically validating `2` as the correct next value before the user
+tests it in-game - it remains a reasoned guess, now confirmed to be
+untestable-by-comparison rather than just unconfirmed.
+
+(Side note, not chased further: `SP2`'s bag disappearing after save
+`161` and never returning could mean that quest completed and its file
+got cleaned up from serialization - or could simply be the same
+zone-bound behavior found earlier for Casbrim/NPCs, i.e. the player
+just wasn't back in that DLC2 zone again. Not enough evidence either
+way, and not this session's focus.)
+
+Scratch scripts for this pass (gitignored, not committed):
+`script/wd_extract/find_all_quest_files_soc.py`.
